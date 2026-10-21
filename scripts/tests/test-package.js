@@ -16,7 +16,7 @@ const {
   validateExtensions, extensionAsset, verifyExtension, installExtensions,
 } = require('../release/package-extensions')
 const { patchProduct, replaceLauncher, overlay, rebrand } = require('../release/package-branding')
-const { check, verifyArtifacts, publish } = require('../release/release')
+const { validateReleaseRequest, check, verifyArtifacts, publish } = require('../release/release')
 const config = require('../../config/release.json')
 const metadata = require('../../config/product-overrides.json')
 
@@ -364,6 +364,17 @@ test('publication requires exactly six nonempty packages with matching portable 
   await assert.rejects(verifyArtifacts(directory), /checksum mismatch/)
   fs.rmSync(path.join(directory, name))
   await assert.rejects(verifyArtifacts(directory), /exactly six/)
+})
+
+test('manual releases require main and the exact configured version', () => {
+  assert.doesNotThrow(() => validateReleaseRequest('refs/heads/main', config.releaseVersion))
+  for (const ref of ['refs/heads/feature', 'refs/tags/main', 'refs/tags/0.1.6', '', undefined]) {
+    assert.throws(() => validateReleaseRequest(ref, config.releaseVersion), /main branch/)
+  }
+  for (const version of ['', undefined, `v${config.releaseVersion}`, '../version']) {
+    assert.throws(() => validateReleaseRequest('refs/heads/main', version), /Invalid release version/)
+  }
+  assert.throws(() => validateReleaseRequest('refs/heads/main', '9999.0.0'), /does not match/)
 })
 
 test('preflight builds the complete matrix and fails if even one upstream asset is missing', async (t) => {

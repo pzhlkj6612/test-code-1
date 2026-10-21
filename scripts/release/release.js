@@ -50,6 +50,14 @@ async function requireUnusedVersion(repository, version) {
   }
 }
 
+function validateReleaseRequest(ref, version) {
+  if (ref !== 'refs/heads/main') throw new Error('Manual releases must run on the main branch')
+  validateVersion(version)
+  if (version !== config.releaseVersion) {
+    throw new Error(`Requested version ${version} does not match configured releaseVersion ${config.releaseVersion}`)
+  }
+}
+
 async function check() {
   const version = config.releaseVersion
   validateVersion(version)
@@ -151,4 +159,4 @@ if (require.main === module) {
   })
 }
 
-module.exports = { check, verifyArtifacts, publish }
+module.exports = { validateReleaseRequest, check, verifyArtifacts, publish }

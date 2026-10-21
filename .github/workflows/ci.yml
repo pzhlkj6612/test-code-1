@@ -1,0 +1,193 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish, matching config/release.json (without a v prefix)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ruyisdk-ide-${{ github.event_name == 'workflow_dispatch' && 'release' || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  configure:
+    name: Configure build and validate release request
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Configure all packaging targets
+        id: matrix
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs')
+          const { TARGETS } = require('./scripts/release/package-utils')
+          const { validateReleaseRequest } = require('./scripts/release/release')
+          if (process.env.GITHUB_EVENT_NAME === 'workflow_dispatch') {
+            validateReleaseRequest(process.env.GITHUB_REF, process.env.REQUESTED_VERSION)
+          }
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `matrix=${JSON.stringify({ include: TARGETS })}\n`)
+          NODE
+      - name: Validate unused release version and pinned upstream inputs
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release/release.js check
+
+  dco:
+    name: DCO compliance
+    needs: configure
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Check sign-offs on pushed or proposed commits
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
+        uses: christophebedard/dco-check@ec8bfc43106afe98b323ace9133650df10497e12 # v0.5.1
+        with:
+          python-version: '3.12'
+          args: '--verbose'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  check:
+    name: Validate source and prepare bundled extensions
+    needs: [configure, dco]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: scripts/package-lock.json
+      - name: Set up Go
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version: '1.22.12'
+          cache: false
+      - name: Install script dependencies
+        run: npm ci --prefix scripts
+      - name: Lint JavaScript
+        run: npm run lint --prefix scripts
+      - name: Run packaging tests
+        run: npm test --prefix scripts
+      - name: Build and download bundled extensions
+        run: node scripts/release/prepare-extensions.js
+      - name: Share bundled extensions with package jobs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: bundled-extensions
+          path: |
+            .cache/extensions/*.vsix
+            .cache/extensions/*.vsix.sha256
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  package:
+    name: Package ${{ matrix.platform }}-${{ matrix.arch }}
+    needs: [configure, check]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.configure.outputs.matrix) }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: scripts/package-lock.json
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.11'
+      - name: Install script dependencies
+        run: npm ci --prefix scripts
+      - name: Download prepared bundled extensions
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: bundled-extensions
+          path: .cache/extensions
+      - name: Generate icons
+        run: |
+          npm test --prefix scripts
+          node scripts/release/generate-icons.js
+      - name: Build platform package
+        env:
+          TARGET_PLATFORM: ${{ matrix.platform }}
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: node scripts/release/package.js "$TARGET_PLATFORM" "$TARGET_ARCH"
+      - name: Upload package and checksum
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ruyisdk-ide-${{ matrix.platform }}-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  publish:
+    name: Publish complete release
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: [configure, dco, check, package]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Download all six packages and checksums
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: ruyisdk-ide-*
+          path: release-assets
+          merge-multiple: true
+      - name: Verify checksums, upload draft, then publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release/release.js publish release-assets

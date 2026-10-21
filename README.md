@@ -30,4 +30,16 @@ CI packages the following architectures:
 
 Download packages from GitHub Releases when available; IDE updates are manual. macOS builds are ad-hoc signed, not notarized; Windows executables retain upstream icons and version resources.
 
-For build requirements and steps, see the [CI release workflow](.github/workflows/release.yml).
+The [CI workflow](.github/workflows/ci.yml) checks commit sign-offs (DCO), lints JavaScript, runs tests, and builds all six packages on branch pushes and pull requests. Packages and SHA-256 checksums are available as workflow artifacts for seven days. Bundled extensions are prepared once and shared by the packaging jobs.
+
+### Publishing a release
+
+Releases are manual; pushes and pull requests never publish.
+
+1. Update `releaseVersion` and any pinned inputs in [config/release.json](config/release.json), then merge the changes into `main`.
+2. In GitHub Actions, select **CI**, choose **Run workflow** on `main`, and enter the exact configured version without a `v` prefix.
+3. Alternatively, dispatch `ci.yml` through the GitHub REST API with `ref: "main"` and `inputs: {"version": "0.1.6"}` (replace the example version with the configured version).
+
+Manual runs reject other branches, mismatched versions, existing release versions or tags, and missing pinned upstream inputs before building. DCO applies to push and pull-request commits; manual dispatch does not introduce commits and skips that check. Release runs are serialized.
+
+After lint, tests, and all six packaging jobs succeed, the publishing job downloads those same artifacts, verifies that all packages and checksums are present and correct, uploads a draft release, and publishes it only after verifying the uploaded assets. It does not rebuild the packages. Only the publishing job has permission to write repository contents.

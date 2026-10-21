@@ -1,0 +1,25 @@
+{
+  "_comment": "Downstream product identity overrides consumed by scripts/release/package.js for all release packages.",
+
+  "productName": "RuyiSDK IDE",
+  "productNameLong": "RuyiSDK IDE",
+  "applicationName": "ruyisdk-ide",
+  "binaryName": "ruyisdk-ide",
+  "dataFolderName": ".ruyisdk-ide",
+  "linuxIconName": "ruyisdk-ide",
+  "urlProtocol": "ruyisdk-ide",
+  "quality": "stable",
+
+  "darwinBundleIdentifier": "cn.ruyisdk.ruyisdk-ide",
+  "win32AppUserModelId": "RuyiSDK.RuyiSDK-IDE",
+  "win32DirName": "RuyiSDK IDE",
+  "win32MutexName": "ruyisdk-ide",
+  "win32NameVersion": "RuyiSDK IDE",
+  "win32RegValueName": "RuyiSDK-IDE",
+  "win32ShellNameShort": "RuyiSDK IDE",
+  "_win32_note": "win32AppId/win32x64AppId/win32arm64AppId/win32UserAppId GUIDs are only needed when building the Windows installer variant; generate fresh GUIDs (uuidgen) before a Windows build instead of reusing VSCodium's or Microsoft's.",
+
+  "vendor": "RuyiSDK",
+  "homepage": "https://ruyisdk.cn",
+  "releaseNotesUrl": "https://github.com/ruyisdk/ruyisdk-vscode-extension/releases"
+}

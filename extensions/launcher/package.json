@@ -1,0 +1,16 @@
+{
+  "name": "home-launcher",
+  "displayName": "RuyiSDK IDE Home Launcher",
+  "description": "Opens the RuyiSDK home page on startup when RuyiSDK is enabled. Downstream companion extension bundled by the RuyiSDK IDE overlay; does not modify ruyisdk-vscode-extension.",
+  "version": "1.0.2",
+  "publisher": "ruyisdk-ide",
+  "license": "Apache-2.0",
+  "private": true,
+  "engines": {
+    "vscode": "^1.88.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "contributes": {}
+}

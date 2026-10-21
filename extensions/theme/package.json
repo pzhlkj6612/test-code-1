@@ -1,0 +1,30 @@
+{
+  "name": "ruyisdk-theme",
+  "displayName": "RuyiSDK IDE Theme",
+  "description": "Coordinated light and dark color themes for RuyiSDK IDE.",
+  "version": "1.0.0",
+  "publisher": "ruyisdk-ide",
+  "license": "Apache-2.0",
+  "private": true,
+  "engines": {
+    "vscode": "^1.88.0"
+  },
+  "categories": ["Themes"],
+  "contributes": {
+    "themes": [
+      {
+        "label": "RuyiSDK Dark",
+        "uiTheme": "vs-dark",
+        "path": "./themes/ruyisdk-dark-color-theme.json"
+      },
+      {
+        "label": "RuyiSDK Light",
+        "uiTheme": "vs",
+        "path": "./themes/ruyisdk-light-color-theme.json"
+      }
+    ],
+    "configurationDefaults": {
+      "workbench.colorTheme": "RuyiSDK Dark"
+    }
+  }
+}

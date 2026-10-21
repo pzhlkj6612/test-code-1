@@ -1,0 +1,22 @@
+{
+  "_comment": "Release version and pinned inputs used by the release packaging and publishing scripts.",
+  "releaseVersion": "0.1.6",
+  "vscodiumVersion": "1.126.04524",
+  "extensions": [
+    {
+      "repository": "kendryte/canmv-vscode-extension",
+      "id": "kendryte747.canmv-vscode",
+      "version": "0.9.10",
+      "source": "build",
+      "commit": "326c1d61e78ddffd9ff17ec896683cda5cf36a88"
+    },
+    {
+      "repository": "ruyisdk/ruyisdk-vscode-extension",
+      "id": "RuyiSDK.ruyisdk-vscode-extension",
+      "version": "0.1.7",
+      "source": "release",
+      "asset": "ruyisdk-vscode-extension-0.1.7.vsix",
+      "sha256": "5d2a71b79f19a6f83548e7454d989e9824ca5cbc392265bc766769efe13ef7c5"
+    }
+  ]
+}

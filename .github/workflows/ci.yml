@@ -30,10 +30,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
+
       - name: Configure all packaging targets
         id: matrix
         env:
@@ -41,6 +43,7 @@ jobs:
           RUN_REF: ${{ github.ref }}
           REQUESTED_VERSION: ${{ inputs.version }}
         run: node scripts/release/configure-workflow.js "$GITHUB_OUTPUT"
+
       - name: Retrieve GitHub release metadata
         if: github.event_name == 'workflow_dispatch' && inputs.version != ''
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -76,6 +79,7 @@ jobs:
             const directory = path.join(process.env.GITHUB_WORKSPACE, '.cache')
             fs.mkdirSync(directory, { recursive: true })
             fs.writeFileSync(path.join(directory, 'release-state.json'), `${JSON.stringify(data, null, 2)}\n`)
+
       - name: Validate GitHub metadata and release inputs
         if: github.event_name == 'workflow_dispatch' && inputs.version != ''
         run: node scripts/release/release.js check .cache/release-state.json "$GITHUB_OUTPUT"
@@ -108,27 +112,35 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: scripts/package-lock.json
+
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.22.12'
           cache: false
+
       - name: Install script dependencies
         run: npm ci --prefix scripts
+
       - name: Lint JavaScript
         run: npm run lint --prefix scripts
+
       - name: Run packaging tests
         run: npm test --prefix scripts
+
       - name: Prepare extension inputs
         run: node scripts/release/prepare-inputs.js --extensions
+
       - name: Build and download bundled extensions
         run: node scripts/release/prepare-extensions.js
+
       - name: Share bundled extensions with package jobs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -155,37 +167,45 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: scripts/package-lock.json
+
       - name: Set up Python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.11'
+
       - name: Install script dependencies
         run: npm ci --prefix scripts
+
       - name: Download prepared bundled extensions
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: bundled-extensions
           path: .cache/extensions
+
       - name: Prepare target archive
         env:
           TARGET_PLATFORM: ${{ matrix.platform }}
           TARGET_ARCH: ${{ matrix.arch }}
         run: node scripts/release/prepare-inputs.js --target "$TARGET_PLATFORM" "$TARGET_ARCH"
+
       - name: Generate icons
         run: |
           npm test --prefix scripts
           node scripts/release/generate-icons.js
+
       - name: Build platform package
         env:
           TARGET_PLATFORM: ${{ matrix.platform }}
           TARGET_ARCH: ${{ matrix.arch }}
         run: node scripts/release/package.js "$TARGET_PLATFORM" "$TARGET_ARCH"
+
       - name: Upload package and checksum
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -208,20 +228,24 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
+
       - name: Download all six packages and checksums
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: ruyisdk-ide-*
           path: release-assets
           merge-multiple: true
+
       - name: Verify release packages and prepare notes
         run: |
           node scripts/release/release.js verify release-assets
           node scripts/release/release.js notes release-notes.md
+
       - name: Publish release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:

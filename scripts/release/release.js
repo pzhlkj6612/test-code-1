@@ -3,8 +3,10 @@
 
 const fs = require('node:fs')
 const path = require('node:path')
+const { isDeepStrictEqual } = require('node:util')
 const config = require('../../config/release.json')
-const { TARGETS, validateVersion, outputAsset, parseChecksum, sha256, resourceById } = require('./package-utils')
+const { TARGETS, validateVersion, outputAsset, parseChecksum, resourceById } = require('./package-utils')
+const { sha256 } = require('./utils')
 const { validateExtensions } = require('./package-extensions')
 const { createProgram, runCli } = require('./cli')
 
@@ -41,13 +43,14 @@ async function verifyArtifacts(directory) {
     return [name, `${name}.sha256`]
   }).sort()
   const actual = fs.readdirSync(directory).sort()
-  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+  if (!isDeepStrictEqual(actual, expected)) {
     throw new Error(`Expected exactly six packages and six checksums; found: ${actual.join(', ')}`)
   }
   for (const target of TARGETS) {
     const name = outputAsset(target, version)
     const file = path.join(directory, name)
-    if (!fs.statSync(file).isFile() || fs.statSync(file).size === 0) throw new Error(`Empty or invalid package: ${name}`)
+    const stats = fs.statSync(file)
+    if (!stats.isFile() || stats.size === 0) throw new Error(`Empty or invalid package: ${name}`)
     const expectedHash = parseChecksum(fs.readFileSync(`${file}.sha256`, 'utf8'), name)
     if (await sha256(file) !== expectedHash) throw new Error(`Release artifact checksum mismatch: ${name}`)
   }

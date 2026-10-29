@@ -7,13 +7,15 @@ const os = require('node:os')
 const path = require('node:path')
 const crypto = require('node:crypto')
 const http = require('node:http')
+const { once } = require('node:events')
 const { spawnSync } = require('node:child_process')
 const test = require('node:test')
 const {
   TARGETS, targetFor, validateVersion, resourceForTarget, resourceById, resourcePath,
   validateResources, outputAsset,
-  parseChecksum, sha256, macExecutable, verifyArchitecture,
+  parseChecksum, macExecutable, verifyArchitecture,
 } = require('../release/package-utils')
+const { sha256 } = require('../release/utils')
 const {
   validateExtensions, extensionAsset, verifyExtension, installExtensions,
 } = require('../release/package-extensions')
@@ -73,7 +75,8 @@ test('pinned resources and extension resource references are provider-neutral', 
 test('resource downloader verifies file hashes after fetching and removes mismatches', async (t) => {
   const content = Buffer.from('downloaded resource')
   const server = http.createServer((_request, response) => response.end(content))
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
   t.after(() => server.close())
   const root = path.resolve(__dirname, '../..')
   const destination = '.cache/test-resource-download.bin'

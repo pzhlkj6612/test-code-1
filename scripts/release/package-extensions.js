@@ -89,15 +89,11 @@ function prepareExtensions() {
       if (!fs.existsSync(downloaded)) throw new Error(`Missing downloaded resource: ${resource.id}`)
       if (path.resolve(downloaded) !== path.resolve(output)) fs.copyFileSync(downloaded, output)
     } else {
-      const directory = fs.mkdtempSync(path.join(cache, 'canmv-build-'))
-      try {
-        const source = resourcePath(resourceById(extension.resource))
-        if (!fs.existsSync(source)) throw new Error(`Missing workflow-cloned source repository: ${source}`)
-        buildCanmvExtension(extension, source, directory, path.join(directory, name))
-        fs.renameSync(path.join(directory, name), output)
-      } finally {
-        fs.rmSync(directory, { recursive: true, force: true })
-      }
+      using directory = fs.mkdtempDisposableSync(path.join(cache, 'canmv-build-'))
+      const source = resourcePath(resourceById(extension.resource))
+      if (!fs.existsSync(source)) throw new Error(`Missing workflow-cloned source repository: ${source}`)
+      buildCanmvExtension(extension, source, directory.path, path.join(directory.path, name))
+      fs.renameSync(path.join(directory.path, name), output)
     }
   }
 }
@@ -106,25 +102,21 @@ function installExtensions(appRoot, build, target, cache = path.join(ROOT, '.cac
   for (const extension of validateExtensions()) {
     const name = extensionAsset(extension)
     const vsix = path.join(cache, name)
-    const temporary = fs.mkdtempSync(path.join(build, 'vsix-'))
-    try {
-      run(process.platform === 'win32' ? 'python' : 'python3', ['-m', 'zipfile', '-e', vsix, temporary])
-      const directory = path.join(temporary, 'extension')
-      verifyExtension(directory, extension)
-      if (extension.source === 'build') {
-        const resource = resourceById(extension.resource)
-        const info = JSON.parse(fs.readFileSync(path.join(directory, 'build-info.json'), 'utf8'))
-        if (info.commit !== resource.commit) throw new Error(`Unexpected source commit for ${extension.id}`)
-        const backend = path.join(directory, 'bin', `${target.platform}-${target.arch}`,
-          target.platform === 'win32' ? 'canmv-backend.exe' : 'canmv-backend')
-        verifyArchitecture(backend, target)
-        // ZIP extraction does not retain Unix executable permissions.
-        if (target.platform !== 'win32') fs.chmodSync(backend, 0o755)
-      }
-      fs.cpSync(directory, path.join(appRoot, 'extensions', extension.id.toLowerCase()), { recursive: true })
-    } finally {
-      fs.rmSync(temporary, { recursive: true, force: true })
+    using temporary = fs.mkdtempDisposableSync(path.join(build, 'vsix-'))
+    run(process.platform === 'win32' ? 'python' : 'python3', ['-m', 'zipfile', '-e', vsix, temporary.path])
+    const directory = path.join(temporary.path, 'extension')
+    verifyExtension(directory, extension)
+    if (extension.source === 'build') {
+      const resource = resourceById(extension.resource)
+      const info = JSON.parse(fs.readFileSync(path.join(directory, 'build-info.json'), 'utf8'))
+      if (info.commit !== resource.commit) throw new Error(`Unexpected source commit for ${extension.id}`)
+      const backend = path.join(directory, 'bin', `${target.platform}-${target.arch}`,
+        target.platform === 'win32' ? 'canmv-backend.exe' : 'canmv-backend')
+      verifyArchitecture(backend, target)
+      // ZIP extraction does not retain Unix executable permissions.
+      if (target.platform !== 'win32') fs.chmodSync(backend, 0o755)
     }
+    fs.cpSync(directory, path.join(appRoot, 'extensions', extension.id.toLowerCase()), { recursive: true })
   }
 }
 

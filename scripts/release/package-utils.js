@@ -3,7 +3,6 @@
 
 const fs = require('node:fs')
 const path = require('node:path')
-const crypto = require('node:crypto')
 const { spawnSync } = require('node:child_process')
 const config = require('../../config/release.json')
 const metadata = require('../../config/product-overrides.json')
@@ -94,12 +93,6 @@ function run(command, args, options = {}) {
   if (result.status !== 0) throw new Error(`${command} failed (${result.status})`)
 }
 
-async function sha256(file) {
-  const hash = crypto.createHash('sha256')
-  for await (const chunk of fs.createReadStream(file)) hash.update(chunk)
-  return hash.digest('hex')
-}
-
 function parseChecksum(text, asset) {
   const lines = text.trim().split(/\r?\n/)
   if (lines.length !== 1) throw new Error(`Expected one checksum for ${asset}`)
@@ -158,5 +151,5 @@ function verifyArchitecture(file, target) {
 module.exports = {
   ROOT, TARGETS, config, metadata, targetFor, validateVersion, resourceForTarget, resourceById,
   resourcePath, validateResources, outputAsset,
-  run, sha256, parseChecksum, writeJson, macExecutable, verifyArchitecture,
+  run, parseChecksum, writeJson, macExecutable, verifyArchitecture,
 }

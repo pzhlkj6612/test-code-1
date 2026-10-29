@@ -6,8 +6,9 @@ const path = require('node:path')
 const { Argument } = require('commander')
 const {
   ROOT, TARGETS, config, metadata, validateVersion, resourceForTarget, resourceById, resourcePath,
-  outputAsset, run, sha256, macExecutable, verifyArchitecture,
+  outputAsset, run, macExecutable, verifyArchitecture,
 } = require('./package-utils')
+const { sha256 } = require('./utils')
 const { installExtensions } = require('./package-extensions')
 const { overlay, rebrand } = require('./package-branding')
 const { createProgram, runCli } = require('./cli')

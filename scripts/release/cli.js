@@ -13,7 +13,7 @@ function createProgram(name, description, output = {}) {
 }
 
 function runCli(main) {
-  Promise.resolve().then(() => main(process.argv.slice(2))).catch((error) => {
+  Promise.try(main, process.argv.slice(2)).catch((error) => {
     if (error instanceof CommanderError) {
       process.exitCode = error.exitCode
     } else {

@@ -3,18 +3,12 @@
 
 const fs = require('node:fs')
 const path = require('node:path')
-const crypto = require('node:crypto')
 const { execFileSync } = require('node:child_process')
 const { Readable } = require('node:stream')
 const { pipeline } = require('node:stream/promises')
 const { config, resourcePath, validateResources } = require('./package-utils')
+const { sha256 } = require('./utils')
 const { createProgram, runCli } = require('./cli')
-
-async function checksum(file) {
-  const hash = crypto.createHash('sha256')
-  for await (const chunk of fs.createReadStream(file)) hash.update(chunk)
-  return hash.digest('hex')
-}
 
 async function download(resource) {
   const destination = resourcePath(resource)
@@ -25,7 +19,7 @@ async function download(resource) {
     const temporary = `${destination}.part`
     try {
       await pipeline(Readable.fromWeb(response.body), fs.createWriteStream(temporary))
-      const actual = await checksum(temporary)
+      const actual = await sha256(temporary)
       if (actual !== resource.sha256) {
         throw new Error(`Checksum mismatch for ${resource.id}: expected ${resource.sha256}, got ${actual}`)
       }
@@ -34,7 +28,7 @@ async function download(resource) {
       fs.rmSync(temporary, { force: true })
     }
   } else {
-    const actual = await checksum(destination)
+    const actual = await sha256(destination)
     if (actual !== resource.sha256) {
       throw new Error(`Checksum mismatch for ${resource.id}: expected ${resource.sha256}, got ${actual}`)
     }
@@ -54,26 +48,22 @@ function clone(resource) {
   }
 
   fs.mkdirSync(path.dirname(destination), { recursive: true })
-  const temporary = fs.mkdtempSync(path.join(path.dirname(destination), `.${path.basename(destination)}-`))
-  const checkout = path.join(temporary, 'checkout')
-  try {
-    execFileSync('git', ['clone', '--filter=blob:none', '--no-checkout', resource.url, checkout], {
-      stdio: 'inherit',
-    })
-    execFileSync('git', ['-C', checkout, 'fetch', '--depth=1', 'origin', resource.commit], {
-      stdio: 'inherit',
-    })
-    execFileSync('git', ['-C', checkout, 'checkout', '--detach', resource.commit], {
-      stdio: 'inherit',
-    })
-    const commit = execFileSync('git', ['-C', checkout, 'rev-parse', 'HEAD'], {
-      encoding: 'utf8',
-    }).trim()
-    if (commit !== resource.commit) throw new Error(`Expected ${resource.commit}, checked out ${commit}`)
-    fs.renameSync(checkout, destination)
-  } finally {
-    fs.rmSync(temporary, { recursive: true, force: true })
-  }
+  using temporary = fs.mkdtempDisposableSync(path.join(path.dirname(destination), `.${path.basename(destination)}-`))
+  const checkout = path.join(temporary.path, 'checkout')
+  execFileSync('git', ['clone', '--filter=blob:none', '--no-checkout', resource.url, checkout], {
+    stdio: 'inherit',
+  })
+  execFileSync('git', ['-C', checkout, 'fetch', '--depth=1', 'origin', resource.commit], {
+    stdio: 'inherit',
+  })
+  execFileSync('git', ['-C', checkout, 'checkout', '--detach', resource.commit], {
+    stdio: 'inherit',
+  })
+  const commit = execFileSync('git', ['-C', checkout, 'rev-parse', 'HEAD'], {
+    encoding: 'utf8',
+  }).trim()
+  if (commit !== resource.commit) throw new Error(`Expected ${resource.commit}, checked out ${commit}`)
+  fs.renameSync(checkout, destination)
 }
 
 function parseArguments(argv, output) {
@@ -118,4 +108,4 @@ async function main(argv) {
 
 if (require.main === module) runCli(main)
 
-module.exports = { checksum, download, clone, parseArguments, selectResources, main }
+module.exports = { download, clone, parseArguments, selectResources, main }

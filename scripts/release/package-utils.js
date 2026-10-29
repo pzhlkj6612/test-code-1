@@ -5,8 +5,6 @@ const fs = require('node:fs')
 const path = require('node:path')
 const crypto = require('node:crypto')
 const { spawnSync } = require('node:child_process')
-const { Readable } = require('node:stream')
-const { pipeline } = require('node:stream/promises')
 const config = require('../../config/release.json')
 const metadata = require('../../config/product-overrides.json')
 
@@ -33,9 +31,55 @@ function validateVersion(version) {
   return version
 }
 
-function upstreamAsset(target) {
-  const format = target.platform === 'linux' ? 'tar.gz' : 'zip'
-  return `VSCodium-${target.platform}-${target.arch}-${config.vscodiumVersion}.${format}`
+function resourceForTarget(target) {
+  const input = config.resources.find((entry) =>
+    entry.type === 'file' &&
+    entry.platform === target.platform && entry.arch === target.arch)
+  if (!input) throw new Error(`Missing file resource for ${target.platform}-${target.arch}`)
+  return input
+}
+
+function resourceById(id) {
+  const resource = config.resources.find((entry) => entry.id === id)
+  if (!resource) throw new Error(`Unknown resource: ${id}`)
+  return resource
+}
+
+function resourcePath(resource) {
+  const resolved = path.resolve(ROOT, resource.path)
+  if (!resolved.startsWith(`${ROOT}${path.sep}`)) throw new Error(`Resource path escapes workspace: ${resource.path}`)
+  return resolved
+}
+
+function validateResources(resources = config.resources) {
+  if (!Array.isArray(resources) || resources.length === 0) throw new Error('Expected nonempty resources array')
+  const ids = new Set()
+  const paths = new Set()
+  for (const resource of resources) {
+    if (!resource || !/^[\w.-]+$/.test(resource.id || '') ||
+        !['file', 'git'].includes(resource.type) || typeof resource.path !== 'string') {
+      throw new Error('Invalid resource definition')
+    }
+    if (ids.has(resource.id)) throw new Error(`Duplicate resource id: ${resource.id}`)
+    ids.add(resource.id)
+    const resolved = resourcePath(resource)
+    if (paths.has(resolved)) throw new Error(`Duplicate resource path: ${resource.path}`)
+    paths.add(resolved)
+    let url
+    try {
+      url = new URL(resource.url)
+    } catch {
+      throw new Error(`Invalid resource URL: ${resource.id}`)
+    }
+    if (!['https:', 'http:'].includes(url.protocol)) throw new Error(`Invalid resource URL: ${resource.id}`)
+    if (resource.type === 'file') {
+      if (!/^[a-f0-9]{64}$/.test(resource.sha256 || '')) throw new Error(`Invalid resource checksum: ${resource.id}`)
+      if (resource.commit !== undefined) throw new Error(`File resource has a commit: ${resource.id}`)
+    } else if (!/^[a-f0-9]{40}$/.test(resource.commit || '') || resource.sha256 !== undefined) {
+      throw new Error(`Invalid repository resource pin: ${resource.id}`)
+    }
+  }
+  return resources
 }
 
 function outputAsset(target, version) {
@@ -64,24 +108,6 @@ function parseChecksum(text, asset) {
     throw new Error(`Invalid checksum file for ${asset}`)
   }
   return match[1].toLowerCase()
-}
-
-async function download(url, destination, expected) {
-  if (!fs.existsSync(destination)) {
-    const response = await fetch(url, { signal: AbortSignal.timeout(600000) })
-    if (!response.ok) throw new Error(`Download failed (${response.status}): ${url}`)
-    const temporary = `${destination}.part`
-    try {
-      await pipeline(Readable.fromWeb(response.body), fs.createWriteStream(temporary))
-      fs.renameSync(temporary, destination)
-    } finally {
-      fs.rmSync(temporary, { force: true })
-    }
-  }
-  const actual = await sha256(destination)
-  if (actual !== expected) {
-    throw new Error(`Checksum mismatch for ${path.basename(destination)}: expected ${expected}, got ${actual}. Remove the cached file before retrying.`)
-  }
 }
 
 function writeJson(file, value) {
@@ -130,6 +156,7 @@ function verifyArchitecture(file, target) {
 }
 
 module.exports = {
-  ROOT, TARGETS, config, metadata, targetFor, validateVersion, upstreamAsset, outputAsset,
-  run, sha256, parseChecksum, download, writeJson, macExecutable, verifyArchitecture,
+  ROOT, TARGETS, config, metadata, targetFor, validateVersion, resourceForTarget, resourceById,
+  resourcePath, validateResources, outputAsset,
+  run, sha256, parseChecksum, writeJson, macExecutable, verifyArchitecture,
 }

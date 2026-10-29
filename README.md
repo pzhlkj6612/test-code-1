@@ -36,10 +36,12 @@ The [CI workflow](.github/workflows/ci.yml) checks commit sign-offs (DCO), lints
 
 Releases are manual; pushes and pull requests never publish.
 
-1. Update `releaseVersion` and any pinned inputs in [config/release.json](config/release.json), then merge the changes into `main`.
+1. Update `releaseVersion` and pinned resources in [config/release.json](config/release.json). Add each downloadable file with its URL and SHA-256, and each Git repository with its URL and commit, then merge the changes into `main`.
 2. In GitHub Actions, select **CI**, choose **Run workflow** on `main`, and enter the exact configured version without a `v` prefix.
 3. Alternatively, dispatch `ci.yml` through the GitHub REST API with `ref: "main"` and `inputs: {"version": "0.1.6"}` (replace the example version with the configured version).
 
-Manual runs reject other branches, mismatched versions, existing release versions or tags, and missing pinned upstream inputs before building. DCO applies to push and pull-request commits; manual dispatch does not introduce commits and skips that check. Release runs are serialized.
+Manual runs reject other branches, mismatched versions, existing release versions or tags before building. GitHub release state is retrieved with Octokit in the workflow and saved as an intermediate file for the offline preflight script. Pinned file downloads and repository clones are described in the same provider-neutral resource list; the generic scripts can fetch all file resources or clone all repository resources in advance. File checksums are verified by the downloader. DCO applies to push and pull-request commits; manual dispatch does not introduce commits and skips that check. Release runs are serialized.
 
-After lint, tests, and all six packaging jobs succeed, the publishing job downloads those same artifacts, verifies that all packages and checksums are present and correct, uploads a draft release, and publishes it only after verifying the uploaded assets. It does not rebuild the packages. Only the publishing job has permission to write repository contents.
+To prefetch all configured dependencies for local work, run `node scripts/release/download-resources.js` and `node scripts/release/clone-resources.js`.
+
+After lint, tests, and all six packaging jobs succeed, the publishing job downloads those same artifacts, verifies that all packages and checksums are present and correct, then publishes them with `softprops/action-gh-release`. It does not rebuild the packages. Only the publishing job has permission to write repository contents.

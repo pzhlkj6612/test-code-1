@@ -6,17 +6,20 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const crypto = require('node:crypto')
+const http = require('node:http')
 const { spawnSync } = require('node:child_process')
 const test = require('node:test')
 const {
-  TARGETS, targetFor, validateVersion, upstreamAsset, outputAsset,
+  TARGETS, targetFor, validateVersion, resourceForTarget, resourceById, resourcePath,
+  validateResources, outputAsset,
   parseChecksum, sha256, macExecutable, verifyArchitecture,
 } = require('../release/package-utils')
 const {
   validateExtensions, extensionAsset, verifyExtension, installExtensions,
 } = require('../release/package-extensions')
 const { patchProduct, replaceLauncher, overlay, rebrand } = require('../release/package-branding')
-const { validateReleaseRequest, check, verifyArtifacts, publish } = require('../release/release')
+const { validateReleaseRequest, check, verifyArtifacts, releaseNotes } = require('../release/release')
+const { download } = require('../release/download-resources')
 const config = require('../../config/release.json')
 const metadata = require('../../config/product-overrides.json')
 
@@ -45,22 +48,50 @@ function nativeHeader(target) {
   return bytes
 }
 
-test('extension pins are parallel, validated entries with release or source inputs', () => {
-  assert.deepEqual(validateExtensions().map((extension) => extension.repository), [
-    'kendryte/canmv-vscode-extension', 'ruyisdk/ruyisdk-vscode-extension',
+test('pinned resources and extension resource references are provider-neutral', () => {
+  assert.deepEqual(validateExtensions().map((extension) => extension.id), [
+    'kendryte747.canmv-vscode', 'RuyiSDK.ruyisdk-vscode-extension',
   ])
-  const [source, release] = config.extensions
-  assert.ok(extensionAsset(source).includes(source.commit))
-  assert.equal(extensionAsset(release), release.asset)
+  assert.equal(validateResources().length, 8)
+  const [source, prebuilt] = config.extensions
+  assert.equal(resourceById(source.resource).type, 'git')
+  assert.match(extensionAsset(source), new RegExp(resourceById(source.resource).commit))
+  assert.equal(resourceById(prebuilt.resource).type, 'file')
+  assert.equal(extensionAsset(prebuilt), path.basename(resourceById(prebuilt.resource).path))
   for (const entries of [
-    null, [], [{ ...source, repository: '../repo' }], [{ ...source, id: '../extension' }],
-    [{ ...source, version: '../1.0.0' }], [{ ...source, commit: 'main' }],
-    [{ ...source, repository: 'unknown/extension' }], [{ ...source, source: 'unknown' }],
-    [{ ...release, asset: '../extension.vsix' }], [{ ...release, sha256: 'invalid' }],
+    null, [], [{ ...source, id: '../extension' }],
+    [{ ...source, version: '../1.0.0' }], [{ ...source, resource: 'missing' }],
+    [{ ...source, source: 'unknown' }], [{ ...prebuilt, resource: source.resource }],
     [source, { ...source, id: source.id.toUpperCase() }],
   ]) {
     assert.throws(() => validateExtensions(entries), /extension|version|source|commit|checksum/i)
   }
+  assert.throws(() => validateResources([{ ...config.resources[0], sha256: 'invalid' }]), /checksum/i)
+  assert.throws(() => resourcePath({ path: '../outside' }), /escapes workspace/)
+})
+
+test('resource downloader verifies file hashes after fetching and removes mismatches', async (t) => {
+  const content = Buffer.from('downloaded resource')
+  const server = http.createServer((_request, response) => response.end(content))
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  t.after(() => server.close())
+  const root = path.resolve(__dirname, '../..')
+  const destination = '.cache/test-resource-download.bin'
+  const file = path.join(root, destination)
+  t.after(() => fs.rmSync(file, { force: true }))
+  const resource = {
+    id: 'download-test',
+    type: 'file',
+    url: `http://127.0.0.1:${server.address().port}/resource`,
+    path: destination,
+    sha256: crypto.createHash('sha256').update(content).digest('hex'),
+  }
+  await download(resource)
+  assert.deepEqual(fs.readFileSync(file), content)
+  fs.rmSync(file)
+  await assert.rejects(download({ ...resource, sha256: '0'.repeat(64) }), /Checksum mismatch/)
+  assert.equal(fs.existsSync(file), false)
+  assert.equal(fs.existsSync(`${file}.part`), false)
 })
 
 test('extension identity and version checks apply to both input types', (t) => {
@@ -83,18 +114,13 @@ test('both VSIX inputs install on every target with verified backends and execut
   const cache = path.join(root, 'cache')
   fs.mkdirSync(cache)
   const source = config.extensions.find((extension) => extension.source === 'build')
-  const release = config.extensions.find((extension) => extension.source === 'release')
-  const previousChecksum = release.sha256
-  t.after(() => { release.sha256 = previousChecksum })
+  const sourceCommit = resourceById(source.resource).commit
   const directories = new Map()
-  async function pack(extension) {
+  function pack(extension) {
     const vsix = path.join(cache, extensionAsset(extension))
     const result = spawnSync(process.platform === 'win32' ? 'python' : 'python3', ['-m', 'zipfile', '-c',
       vsix, path.join(directories.get(extension), 'extension')], { encoding: 'utf8' })
     assert.equal(result.status, 0, result.stderr)
-    const checksum = await sha256(vsix)
-    fs.writeFileSync(`${vsix}.sha256`, `${checksum}  ${extensionAsset(extension)}\n`)
-    if (extension.source === 'release') extension.sha256 = checksum
   }
   for (const extension of config.extensions) {
     const directory = path.join(root, extension.id, 'extension')
@@ -103,7 +129,7 @@ test('both VSIX inputs install on every target with verified backends and execut
     const [publisher, name] = extension.id.split('.')
     fs.writeFileSync(path.join(directory, 'package.json'), JSON.stringify({ publisher, name, version: extension.version }))
     if (extension.source === 'build') {
-      fs.writeFileSync(path.join(directory, 'build-info.json'), JSON.stringify({ commit: extension.commit }))
+      fs.writeFileSync(path.join(directory, 'build-info.json'), JSON.stringify({ commit: sourceCommit }))
       for (const target of TARGETS) {
         const backend = path.join(directory, 'bin', `${target.platform}-${target.arch}`,
           target.platform === 'win32' ? 'canmv-backend.exe' : 'canmv-backend')
@@ -111,7 +137,7 @@ test('both VSIX inputs install on every target with verified backends and execut
         fs.writeFileSync(backend, nativeHeader(target), { mode: 0o644 })
       }
     }
-    await pack(extension)
+    pack(extension)
   }
   for (const target of TARGETS) {
     const build = path.join(root, `${target.platform}-${target.arch}`)
@@ -127,34 +153,34 @@ test('both VSIX inputs install on every target with verified backends and execut
     }
   }
   const target = targetFor('linux', 'riscv64')
-  const vsix = path.join(cache, extensionAsset(source))
-  fs.appendFileSync(vsix, 'corrupted')
-  await assert.rejects(installExtensions(root, root, target, cache), /checksum mismatch/)
   const sourceDirectory = path.join(directories.get(source), 'extension')
   fs.writeFileSync(path.join(sourceDirectory, 'build-info.json'), JSON.stringify({ commit: 'wrong' }))
-  await pack(source)
+  pack(source)
   await assert.rejects(installExtensions(root, root, target, cache), /Unexpected source commit/)
-  fs.writeFileSync(path.join(sourceDirectory, 'build-info.json'), JSON.stringify({ commit: source.commit }))
+  fs.writeFileSync(path.join(sourceDirectory, 'build-info.json'), JSON.stringify({ commit: sourceCommit }))
   const backend = path.join(sourceDirectory, 'bin/linux-riscv64/canmv-backend')
   fs.writeFileSync(backend, nativeHeader(targetFor('linux', 'x64')))
-  await pack(source)
+  pack(source)
   await assert.rejects(installExtensions(root, root, target, cache), /does not match linux-riscv64/)
   fs.rmSync(backend)
-  await pack(source)
+  pack(source)
   await assert.rejects(installExtensions(root, root, target, cache), /ENOENT/)
   assert.equal(fs.readdirSync(root).some((name) => name.startsWith('vsix-')), false)
 })
 
-test('release matrix has exactly the six requested output formats', () => {
+test('release matrix maps all six targets to configured file resources', () => {
   assert.deepEqual(TARGETS.map((t) => `${t.platform}-${t.arch}.${t.format}`), [
     'darwin-arm64.dmg', 'win32-x64.zip', 'win32-arm64.zip',
     'linux-arm64.tar.gz', 'linux-x64.tar.gz', 'linux-riscv64.tar.gz',
   ])
   assert.throws(() => targetFor('linux', 'armhf'), /Unsupported target/)
+  assert.equal(config.resources.filter((resource) =>
+    resource.type === 'file' && resource.platform && resource.arch).length, TARGETS.length)
   for (const target of TARGETS) {
-    const upstream = upstreamAsset(target)
-    assert.ok(upstream.includes(config.vscodiumVersion))
-    assert.equal(upstream.endsWith('.tar.gz'), target.platform === 'linux')
+    const input = resourceForTarget(target)
+    assert.equal(path.basename(input.path).endsWith('.tar.gz'), target.platform === 'linux')
+    assert.match(input.sha256, /^[a-f0-9]{64}$/)
+    assert.equal(resourcePath(input), path.resolve(path.join(__dirname, '../..'), input.path))
     assert.ok(outputAsset(target, '1.2.3-ruyi.1').includes('1.2.3-ruyi.1'))
   }
   assert.equal(outputAsset(TARGETS[0], '1.2.3'), 'ruyisdk-ide-darwin-arm64-1.2.3-unsigned.dmg')
@@ -169,7 +195,7 @@ test('release version cannot inject paths, flags or shell syntax', () => {
 
 test('release and package CLIs reject user-supplied version arguments', () => {
   for (const [script, args] of [
-    ['release.js', ['check', '9.9.9']],
+    ['release.js', ['check']],
     ['release.js', ['publish', '9.9.9', 'release-assets']],
     ['package.js', ['linux', 'x64', '9.9.9']],
   ]) {
@@ -179,7 +205,7 @@ test('release and package CLIs reject user-supplied version arguments', () => {
   }
 })
 
-test('upstream checksums must be a single valid hash for the requested asset', () => {
+test('checksum files must contain one valid hash for the requested asset', () => {
   const hash = 'a'.repeat(64)
   for (const text of [hash, `${hash}  base.zip\n`, `${hash.toUpperCase()} *base.zip\r\n`, `${hash}  ./base.zip`]) {
     assert.equal(parseChecksum(text, 'base.zip'), hash)
@@ -377,126 +403,29 @@ test('manual releases require main and the exact configured version', () => {
   assert.throws(() => validateReleaseRequest('refs/heads/main', '9999.0.0'), /does not match/)
 })
 
-test('preflight builds the complete matrix and fails if even one upstream asset is missing', async (t) => {
-  const previousFetch = global.fetch
-  const previousToken = process.env.GH_TOKEN
-  const previousRepository = process.env.GITHUB_REPOSITORY
-  t.after(() => {
-    global.fetch = previousFetch
-    if (previousToken === undefined) delete process.env.GH_TOKEN
-    else process.env.GH_TOKEN = previousToken
-    if (previousRepository === undefined) delete process.env.GITHUB_REPOSITORY
-    else process.env.GITHUB_REPOSITORY = previousRepository
-  })
-  process.env.GH_TOKEN = 'test-token'
-  process.env.GITHUB_REPOSITORY = 'example/ide'
-  const assets = TARGETS.flatMap((target) => [
-    { name: upstreamAsset(target) }, { name: `${upstreamAsset(target)}.sha256` },
-  ])
-  const source = config.extensions.find((extension) => extension.source === 'build')
-  let sourceCommit = source.commit
-  let extensionAssets = [{ name: config.extensions.find((extension) => extension.source === 'release').asset }]
-  global.fetch = async (url) => {
-    if (url.includes('/repos/example/ide/releases?')) return Response.json([])
-    if (url.includes('/git/ref/tags/')) return new Response('', { status: 404 })
-    if (url.includes('/repos/VSCodium/')) return Response.json({ assets, draft: false, prerelease: false })
-    if (url.includes('/repos/ruyisdk/')) return Response.json({
-      assets: extensionAssets,
-    })
-    if (url.includes('/repos/kendryte/')) {
-      assert.ok(url.endsWith(`/commits/${source.commit}`))
-      return Response.json({ sha: sourceCommit })
-    }
-    throw new Error(`Unexpected API request: ${url}`)
-  }
-  assert.deepEqual(await check(), { include: TARGETS })
-  sourceCommit = 'b'.repeat(40)
-  await assert.rejects(check(), /Pinned source commit is missing/)
-  sourceCommit = source.commit
-  extensionAssets = []
-  await assert.rejects(check(), /Pinned extension asset is missing/)
-  assets.pop()
-  await assert.rejects(check(), /Missing upstream release asset/)
-  global.fetch = async () => new Response('', { status: 403 })
-  await assert.rejects(check(), /GitHub API failed \(403\)/)
-  global.fetch = async () => Response.json([{ tag_name: config.releaseVersion, draft: true }])
-  await assert.rejects(check(), /already exists/)
+test('release preflight reads saved release state without network access', (t) => {
+  const state = { releaseExists: false, tagExists: false }
+  assert.deepEqual(check(state), { include: TARGETS })
+  assert.throws(() => check({ ...state, releaseExists: true }), /already exists/)
+  assert.throws(() => check({ ...state, tagExists: true }), /already exists/)
+  assert.throws(() => check({}), /Invalid release state/)
+  const directory = temporary(t)
+  const metadataFile = path.join(directory, 'release-state.json')
+  const outputFile = path.join(directory, 'output')
+  fs.writeFileSync(metadataFile, JSON.stringify(state))
+  const result = spawnSync(process.execPath, [
+    path.join(RELEASE_DIR, 'release.js'), 'check', metadataFile, outputFile,
+  ], { encoding: 'utf8' })
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(fs.readFileSync(outputFile, 'utf8'), `matrix=${JSON.stringify({ include: TARGETS })}\n`)
 })
 
-test('publication refuses incomplete packages before making any GitHub request', async (t) => {
-  await assert.rejects(publish(temporary(t)), /exactly six/)
-})
-
-test('publication uploads a draft before publishing, and upload failure never publishes', {
-  skip: process.platform === 'win32',
-}, async (t) => {
-  const root = temporary(t)
-  const directory = path.join(root, 'assets')
-  fs.mkdirSync(directory)
-  const version = config.releaseVersion
-  const names = []
-  for (const target of TARGETS) {
-    const name = outputAsset(target, version)
-    names.push(name, `${name}.sha256`)
-    const file = path.join(directory, name)
-    fs.writeFileSync(file, name)
-    fs.writeFileSync(`${file}.sha256`, `${await sha256(file)}  ${name}\n`)
-  }
-  const log = path.join(root, 'gh.log')
-  fs.writeFileSync(path.join(root, 'gh'), `#!/usr/bin/env node
-const fs = require('node:fs')
-const args = process.argv.slice(2)
-fs.appendFileSync(process.env.RUYI_TEST_GH_LOG, JSON.stringify(args) + '\\n')
-if (process.env.RUYI_TEST_UPLOAD_FAIL === 'yes' && args[1] === 'upload') process.exit(1)
-`, { mode: 0o755 })
-  const environment = {
-    PATH: `${root}${path.delimiter}${process.env.PATH}`,
-    GH_TOKEN: 'test-token',
-    GITHUB_REPOSITORY: 'example/ide',
-    GITHUB_SHA: 'a'.repeat(40),
-    RUYI_TEST_GH_LOG: log,
-    RUYI_TEST_UPLOAD_FAIL: '',
-  }
-  const previous = Object.fromEntries(Object.keys(environment).map((key) => [key, process.env[key]]))
-  const previousFetch = global.fetch
-  t.after(() => {
-    global.fetch = previousFetch
-    for (const [key, value] of Object.entries(previous)) {
-      if (value === undefined) delete process.env[key]
-      else process.env[key] = value
-    }
-  })
-  Object.assign(process.env, environment)
-  let listCalls = 0
-  global.fetch = async (url) => {
-    if (url.includes('/git/ref/tags/')) return new Response('', { status: 404 })
-    assert.ok(url.includes('/releases?'))
-    listCalls++
-    return Response.json(listCalls === 1 ? [] : [{
-      tag_name: version,
-      draft: true,
-      assets: names.map((name) => ({ name, size: fs.statSync(path.join(directory, name)).size })),
-    }])
-  }
-  await publish(directory)
-  const commands = fs.readFileSync(log, 'utf8').trim().split('\n').map(JSON.parse)
-  assert.deepEqual(commands.map((args) => args.slice(0, 2)), [
-    ['release', 'create'], ['release', 'upload'], ['release', 'edit'],
-  ])
-  assert.ok(commands[0].includes('--draft'))
-  const notes = commands[0][commands[0].indexOf('--notes') + 1]
+test('release notes describe configured extensions without network access', () => {
+  const notes = releaseNotes()
   for (const extension of config.extensions) {
-    assert.ok(notes.includes(`${extension.repository} ${extension.version}`))
-    if (extension.source === 'build') assert.ok(notes.includes(extension.commit))
+    assert.ok(notes.includes(`${extension.id} ${extension.version}`))
+    if (extension.source === 'build') {
+      assert.ok(notes.includes(resourceById(extension.resource).commit))
+    }
   }
-  assert.equal(commands[0][2], config.releaseVersion)
-  assert.ok(commands[2].includes('--draft=false'))
-  fs.writeFileSync(log, '')
-  listCalls = 0
-  process.env.RUYI_TEST_UPLOAD_FAIL = 'yes'
-  await assert.rejects(publish(directory), /gh release failed/)
-  const failedCommands = fs.readFileSync(log, 'utf8').trim().split('\n').map(JSON.parse)
-  assert.deepEqual(failedCommands.map((args) => args.slice(0, 2)), [
-    ['release', 'create'], ['release', 'upload'],
-  ])
 })

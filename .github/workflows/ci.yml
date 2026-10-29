@@ -37,22 +37,48 @@ jobs:
       - name: Configure all packaging targets
         id: matrix
         env:
+          RUN_EVENT: ${{ github.event_name }}
+          RUN_REF: ${{ github.ref }}
           REQUESTED_VERSION: ${{ inputs.version }}
-        run: |
-          node <<'NODE'
-          const fs = require('node:fs')
-          const { TARGETS } = require('./scripts/release/package-utils')
-          const { validateReleaseRequest } = require('./scripts/release/release')
-          if (process.env.GITHUB_EVENT_NAME === 'workflow_dispatch') {
-            validateReleaseRequest(process.env.GITHUB_REF, process.env.REQUESTED_VERSION)
-          }
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `matrix=${JSON.stringify({ include: TARGETS })}\n`)
-          NODE
-      - name: Validate unused release version and pinned upstream inputs
+        run: node scripts/release/configure-workflow.js "$GITHUB_OUTPUT"
+      - name: Retrieve GitHub release metadata
         if: github.event_name == 'workflow_dispatch'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: node scripts/release/release.js check
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const fs = require('node:fs')
+            const path = require('node:path')
+            const config = require('./config/release.json')
+            const absentOn404 = async (request) => {
+              try {
+                return await request()
+              } catch (error) {
+                if (error.status === 404) return undefined
+                throw error
+              }
+            }
+            const [releases, tag] = await Promise.all([
+              github.paginate(github.rest.repos.listReleases, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per_page: 100,
+              }),
+              absentOn404(() => github.rest.git.getRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `tags/${config.releaseVersion}`,
+              })),
+            ])
+            const data = {
+              releaseExists: releases.some((release) => release.tag_name === config.releaseVersion),
+              tagExists: Boolean(tag),
+            }
+            const directory = path.join(process.env.GITHUB_WORKSPACE, '.cache')
+            fs.mkdirSync(directory, { recursive: true })
+            fs.writeFileSync(path.join(directory, 'release-state.json'), `${JSON.stringify(data, null, 2)}\n`)
+      - name: Validate GitHub metadata and release inputs
+        if: github.event_name == 'workflow_dispatch'
+        run: node scripts/release/release.js check .cache/release-state.json "$GITHUB_OUTPUT"
 
   dco:
     name: DCO compliance
@@ -99,15 +125,17 @@ jobs:
         run: npm run lint --prefix scripts
       - name: Run packaging tests
         run: npm test --prefix scripts
+      - name: Clone pinned extension source
+        run: node scripts/release/clone-resources.js
+      - name: Download pinned extension resource
+        run: node scripts/release/download-resources.js --id ruyisdk-extension
       - name: Build and download bundled extensions
         run: node scripts/release/prepare-extensions.js
       - name: Share bundled extensions with package jobs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: bundled-extensions
-          path: |
-            .cache/extensions/*.vsix
-            .cache/extensions/*.vsix.sha256
+          path: .cache/extensions/*.vsix
           include-hidden-files: true
           if-no-files-found: error
           compression-level: 0
@@ -146,6 +174,11 @@ jobs:
         with:
           name: bundled-extensions
           path: .cache/extensions
+      - name: Download target archive resource
+        env:
+          TARGET_PLATFORM: ${{ matrix.platform }}
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: node scripts/release/download-resources.js --target "$TARGET_PLATFORM" --arch "$TARGET_ARCH"
       - name: Generate icons
         run: |
           npm test --prefix scripts
@@ -187,7 +220,19 @@ jobs:
           pattern: ruyisdk-ide-*
           path: release-assets
           merge-multiple: true
-      - name: Verify checksums, upload draft, then publish
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: node scripts/release/release.js publish release-assets
+      - name: Verify release packages and prepare notes
+        run: |
+          node scripts/release/release.js verify release-assets
+          node scripts/release/release.js notes release-notes.md
+      - name: Publish release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          tag_name: ${{ inputs.version }}
+          name: RuyiSDK IDE ${{ inputs.version }}
+          body_path: release-notes.md
+          target_commitish: ${{ github.sha }}
+          files: release-assets/*
+          draft: false
+          prerelease: false
+          make_latest: true
+          fail_on_unmatched_files: true

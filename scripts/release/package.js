@@ -4,8 +4,8 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const {
-  ROOT, config, metadata, targetFor, validateVersion, upstreamAsset, outputAsset,
-  run, sha256, parseChecksum, download, macExecutable, verifyArchitecture,
+  ROOT, config, metadata, targetFor, validateVersion, resourceForTarget, resourceById, resourcePath,
+  outputAsset, run, sha256, macExecutable, verifyArchitecture,
 } = require('./package-utils')
 const { installExtensions } = require('./package-extensions')
 const { overlay, rebrand } = require('./package-branding')
@@ -17,13 +17,9 @@ async function packageTarget(target) {
   if (process.platform !== requiredHost) throw new Error(`Package ${target.platform} on a ${requiredHost} host`)
   const cache = path.join(ROOT, '.cache')
   fs.mkdirSync(cache, { recursive: true })
-  const asset = upstreamAsset(target)
-  const url = `https://github.com/VSCodium/vscodium/releases/download/${config.vscodiumVersion}/${asset}`
-  const checksumResponse = await fetch(`${url}.sha256`, { signal: AbortSignal.timeout(60000) })
-  if (!checksumResponse.ok) throw new Error(`Missing upstream checksum: ${checksumResponse.status} ${asset}`)
-  const checksumText = await checksumResponse.text()
-  const archive = path.join(cache, asset)
-  await download(url, archive, parseChecksum(checksumText, asset))
+  const input = resourceForTarget(target)
+  const archive = resourcePath(input)
+  if (!fs.existsSync(archive)) throw new Error(`Missing downloaded resource: ${input.id}`)
 
   const build = path.join(ROOT, 'build', `${target.platform}-${target.arch}`)
   fs.rmSync(build, { recursive: true, force: true })
@@ -42,15 +38,16 @@ async function packageTarget(target) {
   await installExtensions(appRoot, build, target)
   rebrand(appDir, appRoot, target)
   fs.writeFileSync(path.join(extracted, 'README-ruyisdk-ide-overlay.txt'), `RuyiSDK IDE ${version}
-Based on checksum-verified VSCodium ${config.vscodiumVersion}.
+Based on checksum-verified upstream editor ${config.baseVersion}.
 Bundled extensions:
-${config.extensions.map((extension) => `${extension.id}: ${extension.version}${extension.source === 'build' ? ` (source ${extension.commit})` : ''}`).join('\n')}
+${config.extensions.map((extension) => {
+    const resource = extension.source === 'build' ? resourceById(extension.resource) : undefined
+    return `${extension.id}: ${extension.version}${resource ? ` (source ${resource.commit})` : ''}`
+  }).join('\n')}
 The startup editor default is none; user settings still override it.
 Editor auto-updates are disabled; install new RuyiSDK IDE releases manually.
 Upstream licenses and third-party notices are retained.
 ${target.platform === 'darwin' ? 'This macOS application is ad-hoc signed only, NOT Developer ID signed or notarized. Gatekeeper may block it.\n' : ''}`)
-  fs.writeFileSync(path.join(build, `${asset}.sha256`), checksumText)
-
   const dist = path.join(ROOT, 'dist')
   fs.mkdirSync(dist, { recursive: true })
   const output = path.join(dist, outputAsset(target, version))

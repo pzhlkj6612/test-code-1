@@ -57,12 +57,15 @@ function replaceLauncher(source, platform) {
 
 function overlay(appRoot, target) {
   patchInstallation(appRoot)
+
   const productFile = path.join(appRoot, 'product.json')
   writeJson(productFile, patchProduct(JSON.parse(fs.readFileSync(productFile, 'utf8'))))
+
   const packageFile = path.join(appRoot, 'package.json')
   const pkg = JSON.parse(fs.readFileSync(packageFile, 'utf8'))
   pkg.name = metadata.productNameLong
   writeJson(packageFile, pkg)
+
   const icons = path.join(ROOT, 'icons/generated')
   for (const name of ['code-icon.svg', 'vscode-icon.svg']) {
     fs.copyFileSync(path.join(icons, 'workbench-icon.svg'), path.join(appRoot, 'out/media', name))
@@ -74,6 +77,7 @@ function overlay(appRoot, target) {
   if (target.platform === 'linux') {
     fs.copyFileSync(path.join(icons, 'code.png'), path.join(appRoot, 'resources/linux/code.png'))
   }
+
   fs.cpSync(path.join(ROOT, 'extensions/launcher'), path.join(appRoot, 'extensions/ruyisdk-ide.home-launcher'), { recursive: true })
   fs.cpSync(path.join(ROOT, 'extensions/theme'), path.join(appRoot, 'extensions/ruyisdk-ide.ruyisdk-theme'), { recursive: true })
 }
@@ -81,9 +85,11 @@ function overlay(appRoot, target) {
 function rebrand(appDir, appRoot, target) {
   if (target.platform === 'linux') {
     fs.renameSync(path.join(appDir, 'codium'), path.join(appDir, metadata.binaryName))
+
     const launcher = path.join(appDir, 'bin/codium')
     fs.writeFileSync(launcher, replaceLauncher(fs.readFileSync(launcher, 'utf8'), 'linux'))
     fs.renameSync(launcher, path.join(appDir, 'bin', metadata.binaryName))
+
     fs.writeFileSync(path.join(appDir, `${metadata.binaryName}.desktop`), `[Desktop Entry]
 Name=${metadata.productNameLong}
 Comment=${metadata.productNameLong} -- ${metadata.vendor}
@@ -105,6 +111,7 @@ Icon=%k/resources/app/resources/linux/code.png
 `)
   } else if (target.platform === 'win32') {
     fs.renameSync(path.join(appDir, 'VSCodium.exe'), path.join(appDir, `${metadata.binaryName}.exe`))
+
     for (const suffix of ['', '.cmd']) {
       const launcher = path.join(appDir, `bin/codium${suffix}`)
       fs.writeFileSync(launcher, replaceLauncher(fs.readFileSync(launcher, 'utf8'), 'win32'))
@@ -114,6 +121,7 @@ Icon=%k/resources/app/resources/linux/code.png
     const launcher = path.join(appRoot, 'bin/codium')
     fs.writeFileSync(launcher, replaceLauncher(fs.readFileSync(launcher, 'utf8'), 'darwin'))
     fs.renameSync(launcher, path.join(appRoot, 'bin', metadata.binaryName))
+
     const plist = path.join(appDir, 'Contents/Info.plist')
     for (const [key, value] of Object.entries({
       CFBundleName: metadata.productName,
@@ -123,6 +131,7 @@ Icon=%k/resources/app/resources/linux/code.png
     })) {
       run('/usr/libexec/PlistBuddy', ['-c', `Set :${key} ${value}`, plist])
     }
+
     const iconset = path.join(path.dirname(appDir), 'ruyisdk-ide.iconset')
     fs.mkdirSync(iconset)
     for (const size of [16, 32, 128, 256, 512]) {
@@ -131,15 +140,18 @@ Icon=%k/resources/app/resources/linux/code.png
         fs.copyFileSync(path.join(ROOT, `icons/generated/icon-${size * scale}.png`), path.join(iconset, name))
       }
     }
+
     const result = spawnSync('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleIconFile', plist], { encoding: 'utf8' })
     if (result.error) throw result.error
     if (result.status !== 0) throw new Error('Cannot read CFBundleIconFile')
     const icon = result.stdout.trim()
     if (!/^[\w.-]+$/.test(icon)) throw new Error(`Unexpected bundle icon name: ${icon}`)
+
     run('iconutil', ['-c', 'icns', iconset, '-o', path.join(appDir, 'Contents/Resources', icon.endsWith('.icns') ? icon : `${icon}.icns`)])
     // An ad-hoc seal is required on Apple Silicon; it is NOT Developer ID signing.
     run('codesign', ['--force', '--deep', '--sign', '-', '--preserve-metadata=entitlements', appDir])
     run('codesign', ['--verify', '--deep', '--strict', appDir])
+
     fs.rmSync(iconset, { recursive: true })
   }
 }

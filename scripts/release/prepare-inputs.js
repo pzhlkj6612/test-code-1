@@ -50,6 +50,7 @@ function clone(resource) {
   fs.mkdirSync(path.dirname(destination), { recursive: true })
   using temporary = fs.mkdtempDisposableSync(path.join(path.dirname(destination), `.${path.basename(destination)}-`))
   const checkout = path.join(temporary.path, 'checkout')
+
   execFileSync('git', ['clone', '--filter=blob:none', '--no-checkout', resource.url, checkout], {
     stdio: 'inherit',
   })
@@ -63,6 +64,7 @@ function clone(resource) {
     encoding: 'utf8',
   }).trim()
   if (commit !== resource.commit) throw new Error(`Expected ${resource.commit}, checked out ${commit}`)
+
   fs.renameSync(checkout, destination)
 }
 

@@ -19,6 +19,7 @@ async function packageTarget(target) {
   validateVersion(version)
   const requiredHost = target.platform === 'darwin' ? 'darwin' : target.platform === 'win32' ? 'win32' : 'linux'
   if (process.platform !== requiredHost) throw new Error(`Package ${target.platform} on a ${requiredHost} host`)
+
   const cache = path.join(ROOT, '.cache')
   fs.mkdirSync(cache, { recursive: true })
   const input = resourceForTarget(target)
@@ -27,6 +28,7 @@ async function packageTarget(target) {
 
   const build = path.join(ROOT, 'build', `${target.platform}-${target.arch}`)
   fs.rmSync(build, { recursive: true, force: true })
+
   const extracted = path.join(build, 'app')
   fs.mkdirSync(extracted, { recursive: true })
   if (target.platform === 'linux') run('tar', ['-xzf', archive, '-C', extracted])
@@ -34,6 +36,7 @@ async function packageTarget(target) {
   else new AdmZip(archive).extractAllTo(extracted, true)
   const appDir = target.platform === 'darwin'
     ? path.join(extracted, 'VSCodium.app') : extracted
+
   const appRoot = path.join(appDir, target.platform === 'darwin' ? 'Contents/Resources/app' : 'resources/app')
   const executable = target.platform === 'darwin' ? macExecutable(appDir)
     : path.join(appDir, target.platform === 'win32' ? 'VSCodium.exe' : 'codium')
@@ -41,6 +44,7 @@ async function packageTarget(target) {
   overlay(appRoot, target)
   installExtensions(appRoot, build, target)
   rebrand(appDir, appRoot, target)
+
   const bundledExtensions = config.extensions.map((extension) => {
     const resource = extension.source === 'build' ? resourceById(extension.resource) : undefined
     const sourceSuffix = resource ? ` (source ${resource.commit})` : ''
@@ -58,8 +62,10 @@ Editor auto-updates are disabled; install new RuyiSDK IDE releases manually.
 Upstream licenses and third-party notices are retained.
 ${macOSNotice}`
   fs.writeFileSync(path.join(extracted, 'README-ruyisdk-ide-overlay.txt'), readme)
+
   const dist = path.join(ROOT, 'dist')
   fs.mkdirSync(dist, { recursive: true })
+
   const output = path.join(dist, outputAsset(target, version))
   fs.rmSync(output, { force: true })
   if (target.platform === 'linux') run('tar', ['-czf', output, '-C', extracted, '.'])
@@ -73,6 +79,7 @@ ${macOSNotice}`
     run('hdiutil', ['create', '-volname', metadata.productName, '-srcfolder', extracted, '-ov', '-format', 'UDZO', output])
     run('hdiutil', ['verify', output])
   }
+
   fs.writeFileSync(`${output}.sha256`, `${await sha256(output)}  ${path.basename(output)}\n`)
   console.log(`Packaged ${output}`)
 }

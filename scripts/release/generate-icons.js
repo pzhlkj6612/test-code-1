@@ -32,12 +32,14 @@ function main(argv) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 720" width="1024" height="1024"><image href="data:image/png;base64,${icon.toString('base64')}" width="720" height="720"/></svg>`
 
   for (const size of SIZES) {
+    const outPath = path.join(OUT_DIR, `icon-${size}.png`)
+
     const resvg = new Resvg(svg, {
       fitTo: { mode: 'width', value: size },
       background: 'rgba(0,0,0,0)',
     })
     const png = resvg.render().asPng()
-    const outPath = path.join(OUT_DIR, `icon-${size}.png`)
+
     fs.writeFileSync(outPath, png)
     console.log(`wrote ${path.relative(ROOT, outPath)} (${size}x${size})`)
   }

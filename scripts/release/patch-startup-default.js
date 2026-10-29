@@ -36,9 +36,11 @@ function patchInstallation(appRoot) {
   const productFile = path.join(appRoot, 'product.json')
   const product = JSON.parse(fs.readFileSync(productFile, 'utf8'))
   verifyChecksums(appRoot, product)
+
   const bundle = path.join(appRoot, 'out', WORKBENCH)
   fs.writeFileSync(bundle, patchStartupDefault(fs.readFileSync(bundle, 'utf8')))
   product.checksums[WORKBENCH] = checksum(bundle)
+
   verifyChecksums(appRoot, product)
   fs.writeFileSync(productFile, JSON.stringify(product, null, 2) + '\n')
 }

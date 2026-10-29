@@ -54,8 +54,10 @@ function buildCanmvExtension(extension, source, directory, output) {
   const resource = resourceById(extension.resource)
   const extensionRoot = path.join(source, extension.sourceDirectory)
   verifyExtension(extensionRoot, extension)
+
   run('npm', ['ci'], { cwd: extensionRoot })
   run('npm', ['run', 'compile'], { cwd: extensionRoot })
+
   for (const target of TARGETS) {
     const executable = target.platform === 'win32' ? 'canmv-backend.exe' : 'canmv-backend'
     const backend = path.join(extensionRoot, 'bin', `${target.platform}-${target.arch}`, executable)
@@ -68,6 +70,7 @@ function buildCanmvExtension(extension, source, directory, output) {
     verifyArchitecture(backend, target)
     fs.chmodSync(backend, 0o755)
   }
+
   writeJson(path.join(extensionRoot, 'build-info.json'), {
     version: extension.version, commit: resource.commit, shortCommit: resource.commit.slice(0, 7), dirty: false,
   })
@@ -81,9 +84,11 @@ function prepareExtensions() {
   const extensions = validateExtensions()
   const cache = path.join(ROOT, '.cache/extensions')
   fs.mkdirSync(cache, { recursive: true })
+
   for (const extension of extensions) {
     const name = extensionAsset(extension)
     const output = path.join(cache, name)
+
     if (extension.source === 'prebuilt') {
       const resource = resourceById(extension.resource)
       const downloaded = resourcePath(resource)
@@ -106,17 +111,22 @@ function installExtensions(appRoot, build, target, cache = path.join(ROOT, '.cac
     using temporary = fs.mkdtempDisposableSync(path.join(build, 'vsix-'))
     new AdmZip(vsix).extractAllTo(temporary.path, true)
     const directory = path.join(temporary.path, 'extension')
+
     verifyExtension(directory, extension)
+
     if (extension.source === 'build') {
       const resource = resourceById(extension.resource)
       const info = JSON.parse(fs.readFileSync(path.join(directory, 'build-info.json'), 'utf8'))
       if (info.commit !== resource.commit) throw new Error(`Unexpected source commit for ${extension.id}`)
       const backend = path.join(directory, 'bin', `${target.platform}-${target.arch}`,
         target.platform === 'win32' ? 'canmv-backend.exe' : 'canmv-backend')
+
       verifyArchitecture(backend, target)
+
       // ZIP extraction does not retain Unix executable permissions.
       if (target.platform !== 'win32') fs.chmodSync(backend, 0o755)
     }
+
     fs.cpSync(directory, path.join(appRoot, 'extensions', extension.id.toLowerCase()), { recursive: true })
   }
 }

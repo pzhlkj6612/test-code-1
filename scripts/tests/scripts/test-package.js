@@ -101,11 +101,11 @@ test('resource downloader verifies file hashes after fetching and removes mismat
 })
 
 test('resource preparer clones and checks out the configured commit', (t) => {
-  const directory = path.resolve(__dirname, '../../../.cache/test-resource-clone')
-  const remote = path.join(directory, 'remote')
-  const destination = path.join(directory, 'checkout')
+  // The checkout must stay inside the workspace because resourcePath() rejects outside paths.
+  const remote = path.join(temporary(t), 'remote')
+  const local = path.resolve(__dirname, '../../../.cache/test-resource-clone')
   fs.mkdirSync(remote, { recursive: true })
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }))
+  t.after(() => fs.rmSync(local, { recursive: true, force: true }))
   const git = (args, options = {}) => {
     const result = spawnSync('git', args, { encoding: 'utf8', ...options })
     assert.equal(result.status, 0, result.stderr)
@@ -116,9 +116,9 @@ test('resource preparer clones and checks out the configured commit', (t) => {
   git(['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'add', '.'], { cwd: remote })
   git(['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-m', 'initial'], { cwd: remote })
   const commit = git(['rev-parse', 'HEAD'], { cwd: remote })
-  clone({ id: 'test-repository', type: 'git', url: remote, commit, path: '.cache/test-resource-clone/checkout' })
-  assert.equal(git(['rev-parse', 'HEAD'], { cwd: destination }), commit)
-  assert.equal(fs.readFileSync(path.join(destination, 'input.txt'), 'utf8'), 'pinned input')
+  clone({ id: 'test-repository', type: 'git', url: remote, commit, path: '.cache/test-resource-clone' })
+  assert.equal(git(['rev-parse', 'HEAD'], { cwd: local }), commit)
+  assert.equal(fs.readFileSync(path.join(local, 'input.txt'), 'utf8'), 'pinned input')
 })
 
 test('extension identity and version checks apply to both input types', (t) => {

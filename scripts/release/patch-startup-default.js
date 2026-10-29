@@ -4,6 +4,7 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const crypto = require('node:crypto')
+const { createProgram, runCli } = require('./cli')
 
 const WORKBENCH = 'vs/workbench/workbench.desktop.main.js'
 
@@ -42,10 +43,18 @@ function patchInstallation(appRoot) {
   fs.writeFileSync(productFile, JSON.stringify(product, null, 2) + '\n')
 }
 
-if (require.main === module) {
-  const appRoot = process.argv[2]
-  if (!appRoot) throw new Error('Usage: node scripts/release/patch-startup-default.js <resources/app directory>')
-  patchInstallation(appRoot)
+function parseArguments(argv, output) {
+  const program = createProgram('patch-startup-default.js',
+    'Set the built-in workbench.startupEditor default to none and refresh its integrity checksum', output)
+    .argument('<app-root>', 'resources/app directory of an extracted editor')
+  program.parse(argv, { from: 'user' })
+  return { appRoot: program.args[0] }
 }
 
-module.exports = { patchStartupDefault, patchInstallation }
+function main(argv) {
+  patchInstallation(parseArguments(argv).appRoot)
+}
+
+if (require.main === module) runCli(main)
+
+module.exports = { patchStartupDefault, patchInstallation, parseArguments, main }

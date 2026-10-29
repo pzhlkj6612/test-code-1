@@ -4,11 +4,26 @@
 const fs = require('node:fs')
 const { TARGETS, validateResources } = require('./package-utils')
 const { validateReleaseRequest } = require('./release')
+const { createProgram, runCli } = require('./cli')
 
-validateResources()
-if (process.env.RUN_EVENT === 'workflow_dispatch' && process.env.REQUESTED_VERSION) {
-  validateReleaseRequest(process.env.RUN_REF, process.env.REQUESTED_VERSION)
+function parseArguments(argv, output) {
+  const program = createProgram('configure-workflow.js',
+    'Validate the release request and append the packaging matrix to a GitHub Actions output file', output)
+    .argument('<output-file>', 'GitHub Actions output file to append the matrix to')
+    .option('--event <name>', 'triggering GitHub event name', '')
+    .option('--ref <ref>', 'triggering Git ref', '')
+    .option('--requested-version <version>', 'release version requested by a manual run', '')
+  program.parse(argv, { from: 'user' })
+  return { output: program.args[0], ...program.opts() }
 }
-const output = process.argv[2]
-if (!output) throw new Error('Usage: node scripts/release/configure-workflow.js <output-file>')
-fs.appendFileSync(output, `matrix=${JSON.stringify({ include: TARGETS })}\n`)
+
+function main(argv) {
+  const { output, event, ref, requestedVersion } = parseArguments(argv)
+  validateResources()
+  if (event === 'workflow_dispatch' && requestedVersion) validateReleaseRequest(ref, requestedVersion)
+  fs.appendFileSync(output, `matrix=${JSON.stringify({ include: TARGETS })}\n`)
+}
+
+if (require.main === module) runCli(main)
+
+module.exports = { parseArguments, main }

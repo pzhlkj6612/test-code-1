@@ -6,6 +6,7 @@ const path = require('node:path')
 const config = require('../../config/release.json')
 const { TARGETS, validateVersion, outputAsset, parseChecksum, sha256, resourceById } = require('./package-utils')
 const { validateExtensions } = require('./package-extensions')
+const { createProgram, runCli } = require('./cli')
 
 function validateReleaseRequest(ref, version) {
   if (ref !== 'refs/heads/main') throw new Error('Manual releases must run on the main branch')
@@ -71,24 +72,38 @@ Windows ZIPs retain upstream executable icons and embedded version resources.
 Editor auto-updates are disabled to prevent replacement by VSCodium; install subsequent RuyiSDK IDE releases manually.`
 }
 
-if (require.main === module) {
-  const [command, argument, output, ...extra] = process.argv.slice(2)
-  Promise.resolve().then(async () => {
-    if (extra.length) throw new Error('Too many arguments')
-    if (command === 'check' && argument && output) {
-      const result = check(JSON.parse(fs.readFileSync(argument, 'utf8')))
-      fs.appendFileSync(output, `matrix=${JSON.stringify(result)}\n`)
-    } else if (command === 'verify' && argument) {
-      await verifyArtifacts(path.resolve(argument))
-    } else if (command === 'notes' && argument) {
-      fs.writeFileSync(argument, `${releaseNotes()}\n`)
-    } else {
-      throw new Error('Usage: node scripts/release/release.js check <release-state.json> <output-file> | verify <artifact-directory> | notes <output-file>')
-    }
-  }).catch((error) => {
-    console.error(error)
-    process.exitCode = 1
-  })
+function parseArguments(argv, output) {
+  let parsed
+  const program = createProgram('release.js', 'Validate, verify and describe a RuyiSDK IDE release', output)
+  program.command('check')
+    .description('Validate saved GitHub release state and append the release matrix to an output file')
+    .argument('<release-state>', 'JSON file with releaseExists and tagExists booleans')
+    .argument('<output-file>', 'GitHub Actions output file to append the matrix to')
+    .action((releaseState, outputFile) => { parsed = { command: 'check', releaseState, output: outputFile } })
+  program.command('verify')
+    .description('Verify that a directory contains exactly the expected packages and checksums')
+    .argument('<artifact-directory>', 'directory containing release packages')
+    .action((directory) => { parsed = { command: 'verify', directory } })
+  program.command('notes')
+    .description('Write release notes')
+    .argument('<output-file>', 'file to write the release notes to')
+    .action((outputFile) => { parsed = { command: 'notes', output: outputFile } })
+  program.parse(argv, { from: 'user' })
+  return parsed
 }
 
-module.exports = { validateReleaseRequest, check, verifyArtifacts, releaseNotes }
+async function main(argv) {
+  const args = parseArguments(argv)
+  if (args.command === 'check') {
+    const result = check(JSON.parse(fs.readFileSync(args.releaseState, 'utf8')))
+    fs.appendFileSync(args.output, `matrix=${JSON.stringify(result)}\n`)
+  } else if (args.command === 'verify') {
+    await verifyArtifacts(path.resolve(args.directory))
+  } else {
+    fs.writeFileSync(args.output, `${releaseNotes()}\n`)
+  }
+}
+
+if (require.main === module) runCli(main)
+
+module.exports = { validateReleaseRequest, check, verifyArtifacts, releaseNotes, parseArguments, main }

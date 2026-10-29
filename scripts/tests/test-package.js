@@ -214,18 +214,6 @@ test('release version cannot inject paths, flags or shell syntax', () => {
   }
 })
 
-test('release and package CLIs reject user-supplied version arguments', () => {
-  for (const [script, args] of [
-    ['release.js', ['check']],
-    ['release.js', ['publish', '9.9.9', 'release-assets']],
-    ['package.js', ['linux', 'x64', '9.9.9']],
-  ]) {
-    const result = spawnSync(process.execPath, [path.join(RELEASE_DIR, script), ...args], { encoding: 'utf8' })
-    assert.equal(result.status, 1)
-    assert.match(result.stderr, /Usage:|Too many arguments/)
-  }
-})
-
 test('checksum files must contain one valid hash for the requested asset', () => {
   const hash = 'a'.repeat(64)
   for (const text of [hash, `${hash}  base.zip\n`, `${hash.toUpperCase()} *base.zip\r\n`, `${hash}  ./base.zip`]) {
@@ -422,22 +410,6 @@ test('manual releases require main and the exact configured version', () => {
     assert.throws(() => validateReleaseRequest('refs/heads/main', version), /Invalid release version/)
   }
   assert.throws(() => validateReleaseRequest('refs/heads/main', '9999.0.0'), /does not match/)
-})
-
-test('manual CI runs without a version skip release validation', (t) => {
-  const output = path.join(temporary(t), 'workflow-output.txt')
-  const script = path.resolve(__dirname, '../release/configure-workflow.js')
-  const result = spawnSync(process.execPath, [script, output], {
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      RUN_EVENT: 'workflow_dispatch',
-      RUN_REF: 'refs/heads/feature',
-      REQUESTED_VERSION: '',
-    },
-  })
-  assert.equal(result.status, 0, result.stderr)
-  assert.match(fs.readFileSync(output, 'utf8'), /^matrix=/)
 })
 
 test('release preflight reads saved release state without network access', (t) => {

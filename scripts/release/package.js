@@ -3,12 +3,14 @@
 
 const fs = require('node:fs')
 const path = require('node:path')
+const { Argument } = require('commander')
 const {
-  ROOT, config, metadata, targetFor, validateVersion, resourceForTarget, resourceById, resourcePath,
+  ROOT, TARGETS, config, metadata, validateVersion, resourceForTarget, resourceById, resourcePath,
   outputAsset, run, sha256, macExecutable, verifyArchitecture,
 } = require('./package-utils')
 const { installExtensions } = require('./package-extensions')
 const { overlay, rebrand } = require('./package-branding')
+const { createProgram, runCli } = require('./cli')
 
 async function packageTarget(target) {
   const version = config.releaseVersion
@@ -71,13 +73,21 @@ ${macOSNotice}`
   console.log(`Packaged ${output}`)
 }
 
-if (require.main === module) {
-  const [platform, arch, ...extra] = process.argv.slice(2)
-  Promise.resolve().then(() => {
-    if (extra.length) throw new Error('Usage: node scripts/release/package.js <linux|win32|darwin> <arch>')
-    return packageTarget(targetFor(platform, arch))
-  }).catch((error) => {
-    console.error(error)
-    process.exitCode = 1
-  })
+function parseArguments(argv, output) {
+  const program = createProgram('package.js', 'Package RuyiSDK IDE for one target', output)
+    .addArgument(new Argument('<platform>', 'target platform').choices([...new Set(TARGETS.map((t) => t.platform))]))
+    .addArgument(new Argument('<arch>', 'target architecture').choices([...new Set(TARGETS.map((t) => t.arch))]))
+  program.parse(argv, { from: 'user' })
+  const [platform, arch] = program.args
+  const target = TARGETS.find((entry) => entry.platform === platform && entry.arch === arch)
+  if (!target) program.error(`Unsupported target '${platform}-${arch}'`)
+  return { target }
 }
+
+async function main(argv) {
+  return packageTarget(parseArguments(argv).target)
+}
+
+if (require.main === module) runCli(main)
+
+module.exports = { packageTarget, parseArguments, main }

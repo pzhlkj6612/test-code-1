@@ -13,6 +13,7 @@
 const fs = require('fs')
 const path = require('path')
 const { Resvg } = require('@resvg/resvg-js')
+const { createProgram, runCli } = require('./cli')
 
 const ROOT = path.resolve(__dirname, '../..')
 const SRC_PNG = path.join(ROOT, 'icons', 'source', 'icon.png')
@@ -23,7 +24,14 @@ const OUT_DIR = path.join(ROOT, 'icons', 'generated')
 // plus a handful of common sizes for hicolor icon themes / favicon-style uses.
 const SIZES = [16, 24, 32, 48, 64, 128, 192, 256, 512, 1024]
 
-function main() {
+function parseArguments(argv, output) {
+  createProgram('generate-icons.js', 'Rasterize icons/source/icon.png into icons/generated', output)
+    .parse(argv, { from: 'user' })
+  return {}
+}
+
+function main(argv) {
+  parseArguments(argv)
   fs.mkdirSync(OUT_DIR, { recursive: true })
 
   const icon = fs.readFileSync(SRC_PNG)
@@ -63,4 +71,6 @@ function main() {
   console.log('wrote icons/generated/letterpress-icon.svg (monochrome letterpress artwork)')
 }
 
-main()
+if (require.main === module) runCli(main)
+
+module.exports = { parseArguments, main }

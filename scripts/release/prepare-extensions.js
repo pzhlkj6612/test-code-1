@@ -2,11 +2,19 @@
 'use strict'
 
 const { prepareExtensions } = require('./package-extensions')
+const { createProgram, runCli } = require('./cli')
 
-Promise.resolve().then(() => {
-  if (process.argv.length !== 2) throw new Error('Usage: node scripts/release/prepare-extensions.js')
+function parseArguments(argv, output) {
+  createProgram('prepare-extensions.js', 'Build or copy every bundled extension into .cache/extensions', output)
+    .parse(argv, { from: 'user' })
+  return {}
+}
+
+async function main(argv) {
+  parseArguments(argv)
   return prepareExtensions()
-}).catch((error) => {
-  console.error(error)
-  process.exitCode = 1
-})
+}
+
+if (require.main === module) runCli(main)
+
+module.exports = { parseArguments, main }

@@ -8,6 +8,7 @@ const { execFileSync } = require('node:child_process')
 const { Readable } = require('node:stream')
 const { pipeline } = require('node:stream/promises')
 const { config, resourcePath, validateResources } = require('./package-utils')
+const { createProgram, runCli } = require('./cli')
 
 async function checksum(file) {
   const hash = crypto.createHash('sha256')
@@ -75,35 +76,46 @@ function clone(resource) {
   }
 }
 
-function selectResources(args) {
-  if (args.length === 1 && args[0] === '--all') return config.resources
-  if (args.length === 1 && args[0] === '--extensions') {
+function parseArguments(argv, output) {
+  let parsed
+  const program = createProgram('prepare-inputs.js',
+    'Download and verify pinned files, and clone pinned repositories, from config/release.json', output)
+  program.command('all')
+    .description('prepare every configured resource')
+    .action(() => { parsed = { selection: 'all' } })
+  program.command('extensions')
+    .description('prepare resources referenced by bundled extensions')
+    .action(() => { parsed = { selection: 'extensions' } })
+  program.command('target')
+    .description('prepare the upstream archive for one packaging target')
+    .argument('<platform>', 'target platform')
+    .argument('<arch>', 'target architecture')
+    .action((platform, arch) => { parsed = { selection: 'target', platform, arch } })
+  program.parse(argv, { from: 'user' })
+  return parsed
+}
+
+function selectResources({ selection, platform, arch }) {
+  if (selection === 'all') return config.resources
+  if (selection === 'extensions') {
     const ids = new Set(config.extensions.map((extension) => extension.resource))
     return config.resources.filter((resource) => ids.has(resource.id))
   }
-  if (args.length === 3 && args[0] === '--target' && args[1] && args[2]) {
-    const matches = config.resources.filter((resource) =>
-      resource.type === 'file' && resource.platform === args[1] && resource.arch === args[2])
-    if (matches.length !== 1) throw new Error(`No file resource for ${args[1]}-${args[2]}`)
-    return matches
-  }
-  throw new Error('Usage: node scripts/release/prepare-inputs.js --all | --extensions | --target <platform> <arch>')
+  const matches = config.resources.filter((resource) =>
+    resource.type === 'file' && resource.platform === platform && resource.arch === arch)
+  if (matches.length !== 1) throw new Error(`No file resource for ${platform}-${arch}`)
+  return matches
 }
 
-async function main(args) {
+async function main(argv) {
+  const selection = parseArguments(argv)
   validateResources()
-  const resources = selectResources(args)
-  for (const resource of resources) {
+  for (const resource of selectResources(selection)) {
     if (resource.type === 'file') await download(resource)
     else clone(resource)
   }
 }
 
-if (require.main === module) {
-  main(process.argv.slice(2)).catch((error) => {
-    console.error(error)
-    process.exitCode = 1
-  })
-}
+if (require.main === module) runCli(main)
 
-module.exports = { checksum, download, clone, selectResources, main }
+module.exports = { checksum, download, clone, parseArguments, selectResources, main }

@@ -64,13 +64,17 @@ function releaseNotes() {
   const version = config.releaseVersion
   validateVersion(version)
   const extensions = validateExtensions()
+  const extensionsList = extensions.map((extension) => {
+    const resource = extension.source === 'build' ? resourceById(extension.resource) : undefined
+    return `- ${extension.id} ${extension.version}${resource ? ` (built from ${resource.commit})` : ''}`
+  }).join('\n')
+
   return `RuyiSDK IDE ${version}, based on upstream editor ${config.baseVersion}.
 
 Includes the RuyiSDK IDE home launcher and:
-${extensions.map((extension) => {
-    const resource = extension.source === 'build' ? resourceById(extension.resource) : undefined
-    return `- ${extension.id} ${extension.version}${resource ? ` (built from ${resource.commit})` : ''}`
-  }).join('\n')}
+
+${extensionsList}
+
 All six packages include SHA-256 checksums.
 
 **macOS arm64: the DMG is unsigned/unnotarized (the app has only an ad-hoc signature). Gatekeeper may block it.**

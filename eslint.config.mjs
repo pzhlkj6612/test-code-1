@@ -12,6 +12,17 @@ export default [
       sourceType: 'commonjs',
       globals: globals.node,
     },
-    rules: js.configs.recommended.rules,
+    rules: {
+      ...js.configs.recommended.rules,
+      // Match TypeScript's ts(6133) "declared but its value is never read".
+      'no-unused-vars': ['error', {
+        vars: 'all',
+        args: 'all',
+        argsIgnorePattern: '^_',
+        caughtErrors: 'all',
+        caughtErrorsIgnorePattern: '^_',
+        ignoreRestSiblings: false,
+      }],
+    },
   },
 ]

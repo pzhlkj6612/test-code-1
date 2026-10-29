@@ -50,7 +50,7 @@ function verifyExtension(directory, extension) {
   }
 }
 
-function buildCanmvExtension(extension, source, directory, output) {
+function buildCanmvExtension(extension, source, output) {
   const resource = resourceById(extension.resource)
   const extensionRoot = path.join(source, extension.sourceDirectory)
   verifyExtension(extensionRoot, extension)
@@ -98,7 +98,7 @@ function prepareExtensions() {
       using directory = fs.mkdtempDisposableSync(path.join(cache, 'canmv-build-'))
       const source = resourcePath(resourceById(extension.resource))
       if (!fs.existsSync(source)) throw new Error(`Missing workflow-cloned source repository: ${source}`)
-      buildCanmvExtension(extension, source, directory.path, path.join(directory.path, name))
+      buildCanmvExtension(extension, source, path.join(directory.path, name))
       fs.renameSync(path.join(directory.path, name), output)
     }
   }

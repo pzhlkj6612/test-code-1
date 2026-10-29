@@ -10,7 +10,7 @@ function parseArguments(argv, output) {
   return {}
 }
 
-async function main(argv) {
+function main(argv) {
   parseArguments(argv)
   return prepareExtensions()
 }

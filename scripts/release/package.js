@@ -37,7 +37,7 @@ async function packageTarget(target) {
     : path.join(appDir, target.platform === 'win32' ? 'VSCodium.exe' : 'codium')
   verifyArchitecture(executable, target)
   overlay(appRoot, target)
-  await installExtensions(appRoot, build, target)
+  installExtensions(appRoot, build, target)
   rebrand(appDir, appRoot, target)
   const bundledExtensions = config.extensions.map((extension) => {
     const resource = extension.source === 'build' ? resourceById(extension.resource) : undefined
@@ -84,7 +84,7 @@ function parseArguments(argv, output) {
   return { target }
 }
 
-async function main(argv) {
+function main(argv) {
   return packageTarget(parseArguments(argv).target)
 }
 

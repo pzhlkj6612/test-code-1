@@ -75,7 +75,7 @@ function buildCanmvExtension(extension, source, directory, output) {
   })
 }
 
-async function prepareExtensions() {
+function prepareExtensions() {
   if (process.platform !== 'linux') throw new Error('Prepare bundled extensions on a Linux host')
   const extensions = validateExtensions()
   const cache = path.join(ROOT, '.cache/extensions')
@@ -102,7 +102,7 @@ async function prepareExtensions() {
   }
 }
 
-async function installExtensions(appRoot, build, target, cache = path.join(ROOT, '.cache/extensions')) {
+function installExtensions(appRoot, build, target, cache = path.join(ROOT, '.cache/extensions')) {
   for (const extension of validateExtensions()) {
     const name = extensionAsset(extension)
     const vsix = path.join(cache, name)

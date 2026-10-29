@@ -130,7 +130,7 @@ test('extension identity and version checks apply to both input types', (t) => {
   }
 })
 
-test('both VSIX inputs install on every target with verified backends and executable permissions', async (t) => {
+test('both VSIX inputs install on every target with verified backends and executable permissions', (t) => {
   const root = temporary(t)
   const cache = path.join(root, 'cache')
   fs.mkdirSync(cache)
@@ -163,7 +163,7 @@ test('both VSIX inputs install on every target with verified backends and execut
   for (const target of TARGETS) {
     const build = path.join(root, `${target.platform}-${target.arch}`)
     fs.mkdirSync(build)
-    await installExtensions(build, build, target, cache)
+    installExtensions(build, build, target, cache)
     for (const extension of config.extensions) {
       verifyExtension(path.join(build, 'extensions', extension.id.toLowerCase()), extension)
     }
@@ -177,15 +177,15 @@ test('both VSIX inputs install on every target with verified backends and execut
   const sourceDirectory = path.join(directories.get(source), 'extension')
   fs.writeFileSync(path.join(sourceDirectory, 'build-info.json'), JSON.stringify({ commit: 'wrong' }))
   pack(source)
-  await assert.rejects(installExtensions(root, root, target, cache), /Unexpected source commit/)
+  assert.throws(() => installExtensions(root, root, target, cache), /Unexpected source commit/)
   fs.writeFileSync(path.join(sourceDirectory, 'build-info.json'), JSON.stringify({ commit: sourceCommit }))
   const backend = path.join(sourceDirectory, 'bin/linux-riscv64/canmv-backend')
   fs.writeFileSync(backend, nativeHeader(targetFor('linux', 'x64')))
   pack(source)
-  await assert.rejects(installExtensions(root, root, target, cache), /does not match linux-riscv64/)
+  assert.throws(() => installExtensions(root, root, target, cache), /does not match linux-riscv64/)
   fs.rmSync(backend)
   pack(source)
-  await assert.rejects(installExtensions(root, root, target, cache), /ENOENT/)
+  assert.throws(() => installExtensions(root, root, target, cache), /ENOENT/)
   assert.equal(fs.readdirSync(root).some((name) => name.startsWith('vsix-')), false)
 })
 

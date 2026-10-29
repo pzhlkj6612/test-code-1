@@ -24,8 +24,7 @@ function parseArguments(argv, output) {
   return {}
 }
 
-function main(argv) {
-  parseArguments(argv)
+function generateIcons() {
   fs.mkdirSync(OUT_DIR, { recursive: true })
 
   const icon = fs.readFileSync(SRC_PNG)
@@ -65,6 +64,11 @@ function main(argv) {
   console.log('wrote icons/generated/letterpress-icon.svg (monochrome letterpress artwork)')
 }
 
+function main(argv) {
+  parseArguments(argv)
+  generateIcons()
+}
+
 if (require.main === module) runCli(main)
 
-module.exports = { parseArguments, main }
+module.exports = { OUT_DIR, generateIcons, parseArguments, main }

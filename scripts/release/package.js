@@ -12,6 +12,7 @@ const {
 const { sha256 } = require('./utils')
 const { installExtensions } = require('./package-extensions')
 const { overlay, rebrand } = require('./package-branding')
+const { generateIcons } = require('./generate-icons')
 const { createProgram, runCli } = require('./cli')
 
 async function packageTarget(target) {
@@ -41,6 +42,7 @@ async function packageTarget(target) {
   const executable = target.platform === 'darwin' ? macExecutable(appDir)
     : path.join(appDir, target.platform === 'win32' ? 'VSCodium.exe' : 'codium')
   verifyArchitecture(executable, target)
+  generateIcons()
   overlay(appRoot, target)
   installExtensions(appRoot, build, target)
   rebrand(appDir, appRoot, target)

@@ -202,10 +202,8 @@ jobs:
           TARGET_ARCH: ${{ matrix.arch }}
         run: node scripts/release/prepare-inputs.js target -- "$TARGET_PLATFORM" "$TARGET_ARCH"
 
-      - name: Generate icons
-        run: |
-          npm test --prefix scripts
-          node scripts/release/generate-icons.js
+      - name: Run script tests
+        run: npm test --prefix scripts
 
       - name: Build platform package
         env:

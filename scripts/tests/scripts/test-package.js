@@ -22,6 +22,7 @@ const {
   validateExtensions, extensionAsset, verifyExtension, installExtensions,
 } = require('../../release/package-extensions')
 const { patchProduct, replaceLauncher, overlay, rebrand } = require('../../release/package-branding')
+const { OUT_DIR: ICONS_DIR, generateIcons } = require('../../release/generate-icons')
 const { validateReleaseRequest, check, verifyArtifacts, releaseNotes } = require('../../release/release')
 const { download, clone } = require('../../release/prepare-inputs')
 const config = require('../../../config/release.json')
@@ -318,8 +319,9 @@ test('shared overlay patches integrity and bundles the home launcher for all pla
   const root = temporary(t)
   const iconNames = ['code-icon.svg', 'vscode-icon.svg',
     'letterpress-light.svg', 'letterpress-dark.svg', 'letterpress-hcLight.svg', 'letterpress-hcDark.svg']
-  const icon = fs.readFileSync(path.resolve(__dirname, '../../../icons/generated/workbench-icon.svg'), 'utf8')
-  const letterpressIcon = fs.readFileSync(path.resolve(__dirname, '../../../icons/generated/letterpress-icon.svg'), 'utf8')
+  generateIcons()
+  const icon = fs.readFileSync(path.join(ICONS_DIR, 'workbench-icon.svg'), 'utf8')
+  const letterpressIcon = fs.readFileSync(path.join(ICONS_DIR, 'letterpress-icon.svg'), 'utf8')
   const embeddedIcon = /href="data:image\/png;base64,([^"]+)"/.exec(icon)
   assert.ok(embeddedIcon, 'workbench logo must embed the RuyiSDK icon')
   assert.deepEqual(Buffer.from(embeddedIcon[1], 'base64'),

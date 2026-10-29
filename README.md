@@ -44,4 +44,6 @@ Manual runs reject other branches, mismatched versions, existing release version
 
 To prefetch all configured dependencies for local work, run `node scripts/release/prepare-inputs.js all`. Use `extensions` to prepare just extension inputs, or `target <platform> <arch>` for a single packaging target. Every script under `scripts/release/` prints its usage with `--help`. The scripts read no environment variables; the workflow passes event data into `env:` and forwards it to the scripts as quoted command-line arguments.
 
+App icons are generated from [icons/source/icon.png](icons/source/icon.png) into the untracked `icons/generated/` directory. `package.js` and the script tests regenerate them automatically; run `node scripts/release/generate-icons.js` to produce them manually.
+
 After lint, tests, and all six packaging jobs succeed, the publishing job downloads those same artifacts, verifies that all packages and checksums are present and correct, then publishes them with `softprops/action-gh-release`. It does not rebuild the packages. Only the publishing job has permission to write repository contents.

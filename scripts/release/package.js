@@ -37,17 +37,23 @@ async function packageTarget(target) {
   overlay(appRoot, target)
   await installExtensions(appRoot, build, target)
   rebrand(appDir, appRoot, target)
-  fs.writeFileSync(path.join(extracted, 'README-ruyisdk-ide-overlay.txt'), `RuyiSDK IDE ${version}
+  const bundledExtensions = config.extensions.map((extension) => {
+    const resource = extension.source === 'build' ? resourceById(extension.resource) : undefined
+    const sourceSuffix = resource ? ` (source ${resource.commit})` : ''
+    return `${extension.id}: ${extension.version}${sourceSuffix}`
+  }).join('\n')
+  const macOSNotice = target.platform === 'darwin'
+    ? 'This macOS application is ad-hoc signed only, NOT Developer ID signed or notarized. Gatekeeper may block it.\n'
+    : ''
+  const readme = `RuyiSDK IDE ${version}
 Based on checksum-verified upstream editor ${config.baseVersion}.
 Bundled extensions:
-${config.extensions.map((extension) => {
-    const resource = extension.source === 'build' ? resourceById(extension.resource) : undefined
-    return `${extension.id}: ${extension.version}${resource ? ` (source ${resource.commit})` : ''}`
-  }).join('\n')}
+${bundledExtensions}
 The startup editor default is none; user settings still override it.
 Editor auto-updates are disabled; install new RuyiSDK IDE releases manually.
 Upstream licenses and third-party notices are retained.
-${target.platform === 'darwin' ? 'This macOS application is ad-hoc signed only, NOT Developer ID signed or notarized. Gatekeeper may block it.\n' : ''}`)
+${macOSNotice}`
+  fs.writeFileSync(path.join(extracted, 'README-ruyisdk-ide-overlay.txt'), readme)
   const dist = path.join(ROOT, 'dist')
   fs.mkdirSync(dist, { recursive: true })
   const output = path.join(dist, outputAsset(target, version))

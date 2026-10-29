@@ -4,6 +4,7 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
+const simplePlist = require('simple-plist')
 const config = require('../../config/release.json')
 const metadata = require('../../config/product-overrides.json')
 
@@ -109,13 +110,14 @@ function writeJson(file, value) {
 
 function macExecutable(appDir) {
   const plist = path.join(appDir, 'Contents/Info.plist')
-  const result = spawnSync(process.platform === 'win32' ? 'python' : 'python3', ['-c',
-    'import plistlib,sys; print(plistlib.load(open(sys.argv[1], "rb"))["CFBundleExecutable"])',
-    plist], { encoding: 'utf8' })
-  if (result.error) throw result.error
-  if (result.status !== 0) throw new Error(`Cannot read CFBundleExecutable from ${plist}: ${result.stderr.trim()}`)
-  const name = result.stdout.trim()
-  if (!name || name === '.' || name === '..' || /[/\\\r\n]/.test(name)) {
+  let name
+  try {
+    name = simplePlist.readFileSync(plist)?.CFBundleExecutable
+  } catch (error) {
+    throw new Error(`Cannot read CFBundleExecutable from ${plist}: ${error.message}`, { cause: error })
+  }
+  if (name === undefined) throw new Error(`Cannot read CFBundleExecutable from ${plist}`)
+  if (typeof name !== 'string' || !name || name === '.' || name === '..' || /[/\\\r\n]/.test(name)) {
     throw new Error(`Invalid CFBundleExecutable in ${plist}: ${name}`)
   }
   return path.join(appDir, 'Contents/MacOS', name)

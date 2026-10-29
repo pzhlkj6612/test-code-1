@@ -3,6 +3,7 @@
 
 const fs = require('node:fs')
 const path = require('node:path')
+const AdmZip = require('adm-zip')
 const { Argument } = require('commander')
 const {
   ROOT, TARGETS, config, metadata, validateVersion, resourceForTarget, resourceById, resourcePath,
@@ -30,7 +31,7 @@ async function packageTarget(target) {
   fs.mkdirSync(extracted, { recursive: true })
   if (target.platform === 'linux') run('tar', ['-xzf', archive, '-C', extracted])
   else if (target.platform === 'darwin') run('ditto', ['-x', '-k', archive, extracted])
-  else run('python', ['-m', 'zipfile', '-e', archive, extracted])
+  else new AdmZip(archive).extractAllTo(extracted, true)
   const appDir = target.platform === 'darwin'
     ? path.join(extracted, 'VSCodium.app') : extracted
   const appRoot = path.join(appDir, target.platform === 'darwin' ? 'Contents/Resources/app' : 'resources/app')
@@ -63,7 +64,9 @@ ${macOSNotice}`
   fs.rmSync(output, { force: true })
   if (target.platform === 'linux') run('tar', ['-czf', output, '-C', extracted, '.'])
   else if (target.platform === 'win32') {
-    run('python', ['-c', 'import shutil,sys; shutil.make_archive(sys.argv[1], "zip", sys.argv[2])', output.slice(0, -4), extracted])
+    const zip = new AdmZip()
+    zip.addLocalFolder(extracted)
+    fs.writeFileSync(output, zip.toBuffer())
   } else {
     fs.renameSync(appDir, path.join(extracted, `${metadata.productName}.app`))
     fs.symlinkSync('/Applications', path.join(extracted, 'Applications'))

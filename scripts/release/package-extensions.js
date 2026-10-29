@@ -3,6 +3,7 @@
 
 const fs = require('node:fs')
 const path = require('node:path')
+const AdmZip = require('adm-zip')
 const {
   validateVersion, TARGETS, ROOT, config, run, writeJson, verifyArchitecture,
   resourceById, resourcePath,
@@ -103,7 +104,7 @@ function installExtensions(appRoot, build, target, cache = path.join(ROOT, '.cac
     const name = extensionAsset(extension)
     const vsix = path.join(cache, name)
     using temporary = fs.mkdtempDisposableSync(path.join(build, 'vsix-'))
-    run(process.platform === 'win32' ? 'python' : 'python3', ['-m', 'zipfile', '-e', vsix, temporary.path])
+    new AdmZip(vsix).extractAllTo(temporary.path, true)
     const directory = path.join(temporary.path, 'extension')
     verifyExtension(directory, extension)
     if (extension.source === 'build') {

@@ -10,6 +10,8 @@ const http = require('node:http')
 const { once } = require('node:events')
 const { spawnSync } = require('node:child_process')
 const test = require('node:test')
+const AdmZip = require('adm-zip')
+const simplePlist = require('simple-plist')
 const {
   TARGETS, targetFor, validateVersion, resourceForTarget, resourceById, resourcePath,
   validateResources, outputAsset,
@@ -141,10 +143,9 @@ test('both VSIX inputs install on every target with verified backends and execut
   const sourceCommit = resourceById(source.resource).commit
   const directories = new Map()
   function pack(extension) {
-    const vsix = path.join(cache, extensionAsset(extension))
-    const result = spawnSync(process.platform === 'win32' ? 'python' : 'python3', ['-m', 'zipfile', '-c',
-      vsix, path.join(directories.get(extension), 'extension')], { encoding: 'utf8' })
-    assert.equal(result.status, 0, result.stderr)
+    const zip = new AdmZip()
+    zip.addLocalFolder(path.join(directories.get(extension), 'extension'), 'extension')
+    fs.writeFileSync(path.join(cache, extensionAsset(extension)), zip.toBuffer())
   }
   for (const extension of config.extensions) {
     const directory = path.join(root, extension.id, 'extension')
@@ -298,6 +299,17 @@ test('macOS executable is resolved from Info.plist rather than assumed to be Ele
   }
   fs.writeFileSync(plist, '<plist version="1.0"><dict></dict></plist>')
   assert.throws(() => macExecutable(app), /Cannot read CFBundleExecutable/)
+  fs.writeFileSync(plist, `<plist version="1.0"><dict><key>Nested</key><dict>
+<key>CFBundleExecutable</key><string>Nested</string></dict></dict></plist>`)
+  assert.throws(() => macExecutable(app), /Cannot read CFBundleExecutable/)
+  fs.writeFileSync(plist, `<plist version="1.0"><dict><key>Nested</key><dict>
+<key>CFBundleExecutable</key><string>Nested</string></dict>
+<key>CFBundleExecutable</key><string>A &amp; B&#x21;</string></dict></plist>`)
+  assert.equal(macExecutable(app), path.join(contents, 'MacOS', 'A & B!'))
+  simplePlist.writeBinaryFileSync(plist, { CFBundleExecutable: 'Binary' })
+  assert.equal(macExecutable(app), path.join(contents, 'MacOS', 'Binary'))
+  fs.writeFileSync(plist, '<plist version="1.0"><dict><key>CFBundleExecutable</key><integer>1</integer></dict></plist>')
+  assert.throws(() => macExecutable(app), /Invalid CFBundleExecutable/)
   fs.writeFileSync(plist, 'invalid plist')
   assert.throws(() => macExecutable(app), /Cannot read CFBundleExecutable/)
 })

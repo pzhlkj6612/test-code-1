@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "lint": "eslint . ../extensions",
-    "test": "node --test tests/test-package.js tests/test-cli.js tests/extensions/test-launcher.js"
+    "test": "node --test tests/scripts/test-package.js tests/scripts/test-cli.js tests/extensions/test-launcher.js"
   },
   "keywords": [],
   "author": "",

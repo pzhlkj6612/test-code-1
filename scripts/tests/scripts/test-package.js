@@ -16,18 +16,18 @@ const {
   TARGETS, targetFor, validateVersion, resourceForTarget, resourceById, resourcePath,
   validateResources, outputAsset,
   parseChecksum, macExecutable, verifyArchitecture,
-} = require('../release/package-utils')
-const { sha256 } = require('../release/utils')
+} = require('../../release/package-utils')
+const { sha256 } = require('../../release/utils')
 const {
   validateExtensions, extensionAsset, verifyExtension, installExtensions,
-} = require('../release/package-extensions')
-const { patchProduct, replaceLauncher, overlay, rebrand } = require('../release/package-branding')
-const { validateReleaseRequest, check, verifyArtifacts, releaseNotes } = require('../release/release')
-const { download, clone } = require('../release/prepare-inputs')
-const config = require('../../config/release.json')
-const metadata = require('../../config/product-overrides.json')
+} = require('../../release/package-extensions')
+const { patchProduct, replaceLauncher, overlay, rebrand } = require('../../release/package-branding')
+const { validateReleaseRequest, check, verifyArtifacts, releaseNotes } = require('../../release/release')
+const { download, clone } = require('../../release/prepare-inputs')
+const config = require('../../../config/release.json')
+const metadata = require('../../../config/product-overrides.json')
 
-const RELEASE_DIR = path.resolve(__dirname, '../release')
+const RELEASE_DIR = path.resolve(__dirname, '../../release')
 
 function temporary(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ruyi-package-'))
@@ -80,7 +80,7 @@ test('resource downloader verifies file hashes after fetching and removes mismat
   server.listen(0, '127.0.0.1')
   await once(server, 'listening')
   t.after(() => server.close())
-  const root = path.resolve(__dirname, '../..')
+  const root = path.resolve(__dirname, '../../..')
   const destination = '.cache/test-resource-download.bin'
   const file = path.join(root, destination)
   t.after(() => fs.rmSync(file, { force: true }))
@@ -100,7 +100,7 @@ test('resource downloader verifies file hashes after fetching and removes mismat
 })
 
 test('resource preparer clones and checks out the configured commit', (t) => {
-  const directory = path.resolve(__dirname, '../../.cache/test-resource-clone')
+  const directory = path.resolve(__dirname, '../../../.cache/test-resource-clone')
   const remote = path.join(directory, 'remote')
   const destination = path.join(directory, 'checkout')
   fs.mkdirSync(remote, { recursive: true })
@@ -205,7 +205,7 @@ test('release matrix maps all six targets to configured file resources', () => {
     const input = resourceForTarget(target)
     assert.equal(path.basename(input.path).endsWith('.tar.gz'), target.platform === 'linux')
     assert.match(input.sha256, /^[a-f0-9]{64}$/)
-    assert.equal(resourcePath(input), path.resolve(path.join(__dirname, '../..'), input.path))
+    assert.equal(resourcePath(input), path.resolve(path.join(__dirname, '../../..'), input.path))
     assert.ok(outputAsset(target, '1.2.3-ruyi.1').includes('1.2.3-ruyi.1'))
   }
   assert.equal(outputAsset(TARGETS[0], '1.2.3'), 'ruyisdk-ide-darwin-arm64-1.2.3-unsigned.dmg')
@@ -318,12 +318,12 @@ test('shared overlay patches integrity and bundles the home launcher for all pla
   const root = temporary(t)
   const iconNames = ['code-icon.svg', 'vscode-icon.svg',
     'letterpress-light.svg', 'letterpress-dark.svg', 'letterpress-hcLight.svg', 'letterpress-hcDark.svg']
-  const icon = fs.readFileSync(path.resolve(__dirname, '../../icons/generated/workbench-icon.svg'), 'utf8')
-  const letterpressIcon = fs.readFileSync(path.resolve(__dirname, '../../icons/generated/letterpress-icon.svg'), 'utf8')
+  const icon = fs.readFileSync(path.resolve(__dirname, '../../../icons/generated/workbench-icon.svg'), 'utf8')
+  const letterpressIcon = fs.readFileSync(path.resolve(__dirname, '../../../icons/generated/letterpress-icon.svg'), 'utf8')
   const embeddedIcon = /href="data:image\/png;base64,([^"]+)"/.exec(icon)
   assert.ok(embeddedIcon, 'workbench logo must embed the RuyiSDK icon')
   assert.deepEqual(Buffer.from(embeddedIcon[1], 'base64'),
-    fs.readFileSync(path.resolve(__dirname, '../../icons/source/icon.png')))
+    fs.readFileSync(path.resolve(__dirname, '../../../icons/source/icon.png')))
   assert.match(letterpressIcon, /<feColorMatrix type="saturate" values="0"\/>/,
     'letterpress watermark must be monochrome')
   assert.match(letterpressIcon, /<image opacity="0\.35" filter="url\(#monochrome\)"/,

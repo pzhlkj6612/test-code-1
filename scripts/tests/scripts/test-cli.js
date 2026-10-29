@@ -7,10 +7,10 @@ const os = require('node:os')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
 const test = require('node:test')
-const { TARGETS } = require('../release/package-utils')
-const config = require('../../config/release.json')
+const { TARGETS } = require('../../release/package-utils')
+const config = require('../../../config/release.json')
 
-const RELEASE_DIR = path.resolve(__dirname, '../release')
+const RELEASE_DIR = path.resolve(__dirname, '../../release')
 const quiet = { writeOut: () => {}, writeErr: () => {} }
 
 function parser(script) {
@@ -122,7 +122,7 @@ test('release.js accepts exactly the check, verify and notes commands', () => {
 })
 
 test('release.js commands write their outputs', async (t) => {
-  const { main } = require('../release/release')
+  const { main } = require('../../release/release')
   const directory = temporary(t)
   const notes = path.join(directory, 'notes.md')
   await main(['notes', notes])
@@ -150,7 +150,7 @@ test('package.js accepts exactly one supported platform and architecture', () =>
 
 test('prepare-inputs.js selects all, extension or single-target resources', () => {
   const parse = parser('prepare-inputs.js')
-  const { selectResources } = require('../release/prepare-inputs')
+  const { selectResources } = require('../../release/prepare-inputs')
   assert.deepEqual(parse(['all']), { selection: 'all' })
   assert.deepEqual(selectResources(parse(['all'])), config.resources)
   assert.deepEqual(parse(['extensions']), { selection: 'extensions' })

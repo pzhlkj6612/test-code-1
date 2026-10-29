@@ -1,6 +1,6 @@
 {
   "_comment": "Release version, upstream version, and provider-neutral pinned resources.",
-  "releaseVersion": "0.1.6",
+  "releaseVersion": "0.1.7",
   "baseVersion": "1.126.04524",
   "resources": [
     {

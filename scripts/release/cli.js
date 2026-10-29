@@ -3,8 +3,6 @@
 
 const { Command, CommanderError } = require('commander')
 
-// Commander throws instead of calling process.exit() so callers (and tests) can
-// inspect parse results and failures.
 function createProgram(name, description, output = {}) {
   return new Command(name)
     .description(description)

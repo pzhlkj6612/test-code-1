@@ -30,7 +30,7 @@ function patchProduct(product, identity = metadata) {
   product.builtInExtensionsEnabledWithAutoUpdates = [...new Set([
     ...product.builtInExtensionsEnabledWithAutoUpdates, ...validateExtensions().map((extension) => extension.id),
   ])]
-  // The upstream updater would install VSCodium over this downstream overlay.
+  // Otherwisw, the upstream updater would install VSCodium over this downstream overlay.
   delete product.updateUrl
   for (const key of Object.keys(product)) {
     if (/^win32.*AppId$/.test(key)) delete product[key]

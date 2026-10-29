@@ -3,10 +3,6 @@
 //
 // Rasterizes the RuyiSDK extension icon into PNG sizes for release packages,
 // including Linux app icons and the macOS iconset.
-//
-// Uses @resvg/resvg-js (prebuilt native binding, no system imagemagick/
-// librsvg CLI required) since this environment has no root/apt access to
-// install those system tools.
 
 'use strict'
 
@@ -19,10 +15,8 @@ const ROOT = path.resolve(__dirname, '../..')
 const SRC_PNG = path.join(ROOT, 'icons', 'source', 'icon.png')
 const OUT_DIR = path.join(ROOT, 'icons', 'generated')
 
-// Sizes needed for the Linux repack: the main app/desktop icon (VS Code's
-// upstream Linux icon ships at 512x512 as resources/app/resources/linux/code.png)
-// plus a handful of common sizes for hicolor icon themes / favicon-style uses.
-const SIZES = [16, 24, 32, 48, 64, 128, 192, 256, 512, 1024]
+// macOS iconset: 16-512 at 1x and 2x.
+const SIZES = [16, 32, 64, 128, 256, 512, 1024]
 
 function parseArguments(argv, output) {
   createProgram('generate-icons.js', 'Rasterize icons/source/icon.png into icons/generated', output)
@@ -48,8 +42,8 @@ function main(argv) {
     console.log(`wrote ${path.relative(ROOT, outPath)} (${size}x${size})`)
   }
 
-  // Canonical "code.png" name expected by the Linux packaging path
-  // (upstream VSCodium/VS Code ship this at 1024x1024).
+  // The file name is expected by the Linux packaging path.
+  // Upstream's resources/app/resources/linux/code.png is 1024x1024.
   fs.copyFileSync(
     path.join(OUT_DIR, 'icon-1024.png'),
     path.join(OUT_DIR, 'code.png'),
@@ -60,9 +54,7 @@ function main(argv) {
   fs.writeFileSync(path.join(OUT_DIR, 'workbench-icon.svg'), svg)
   console.log('wrote icons/generated/workbench-icon.svg (1024x1024 render box)')
 
-  // VSCodium's letterpress watermarks are monochrome; keep them separate from
-  // the colored app and workbench icons. Lower their opacity to keep the
-  // watermark subtle against the welcome page.
+  // Monochrome letterpress watermark.
   const letterpressSvg = svg.replace(
     '<image ',
     '<defs><filter id="monochrome"><feColorMatrix type="saturate" values="0"/></filter></defs><image opacity="0.35" filter="url(#monochrome)" ',

@@ -125,10 +125,8 @@ jobs:
         run: npm run lint --prefix scripts
       - name: Run packaging tests
         run: npm test --prefix scripts
-      - name: Clone pinned extension source
-        run: node scripts/release/clone-resources.js
-      - name: Download pinned extension resource
-        run: node scripts/release/download-resources.js --id ruyisdk-extension
+      - name: Prepare extension inputs
+        run: node scripts/release/prepare-inputs.js --extensions
       - name: Build and download bundled extensions
         run: node scripts/release/prepare-extensions.js
       - name: Share bundled extensions with package jobs
@@ -174,11 +172,11 @@ jobs:
         with:
           name: bundled-extensions
           path: .cache/extensions
-      - name: Download target archive resource
+      - name: Prepare target archive
         env:
           TARGET_PLATFORM: ${{ matrix.platform }}
           TARGET_ARCH: ${{ matrix.arch }}
-        run: node scripts/release/download-resources.js --target "$TARGET_PLATFORM" --arch "$TARGET_ARCH"
+        run: node scripts/release/prepare-inputs.js --target "$TARGET_PLATFORM" "$TARGET_ARCH"
       - name: Generate icons
         run: |
           npm test --prefix scripts

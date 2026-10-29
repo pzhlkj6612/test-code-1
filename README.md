@@ -42,6 +42,6 @@ Releases are manual; pushes and pull requests never publish.
 
 Manual runs reject other branches, mismatched versions, existing release versions or tags before building. GitHub release state is retrieved with Octokit in the workflow and saved as an intermediate file for the offline preflight script. Pinned file downloads and repository clones are described in the same provider-neutral resource list; the generic scripts can fetch all file resources or clone all repository resources in advance. File checksums are verified by the downloader. DCO applies to push and pull-request commits; manual dispatch does not introduce commits and skips that check. Release runs are serialized.
 
-To prefetch all configured dependencies for local work, run `node scripts/release/download-resources.js` and `node scripts/release/clone-resources.js`.
+To prefetch all configured dependencies for local work, run `node scripts/release/prepare-inputs.js --all`. Use `--extensions` to prepare just extension inputs, or `--target <platform> <arch>` for a single packaging target.
 
 After lint, tests, and all six packaging jobs succeed, the publishing job downloads those same artifacts, verifies that all packages and checksums are present and correct, then publishes them with `softprops/action-gh-release`. It does not rebuild the packages. Only the publishing job has permission to write repository contents.

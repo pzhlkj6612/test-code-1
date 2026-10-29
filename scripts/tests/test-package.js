@@ -19,7 +19,7 @@ const {
 } = require('../release/package-extensions')
 const { patchProduct, replaceLauncher, overlay, rebrand } = require('../release/package-branding')
 const { validateReleaseRequest, check, verifyArtifacts, releaseNotes } = require('../release/release')
-const { download } = require('../release/download-resources')
+const { download, clone } = require('../release/prepare-inputs')
 const config = require('../../config/release.json')
 const metadata = require('../../config/product-overrides.json')
 
@@ -92,6 +92,27 @@ test('resource downloader verifies file hashes after fetching and removes mismat
   await assert.rejects(download({ ...resource, sha256: '0'.repeat(64) }), /Checksum mismatch/)
   assert.equal(fs.existsSync(file), false)
   assert.equal(fs.existsSync(`${file}.part`), false)
+})
+
+test('resource preparer clones and checks out the configured commit', (t) => {
+  const directory = path.resolve(__dirname, '../../.cache/test-resource-clone')
+  const remote = path.join(directory, 'remote')
+  const destination = path.join(directory, 'checkout')
+  fs.mkdirSync(remote, { recursive: true })
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }))
+  const git = (args, options = {}) => {
+    const result = spawnSync('git', args, { encoding: 'utf8', ...options })
+    assert.equal(result.status, 0, result.stderr)
+    return result.stdout.trim()
+  }
+  git(['init', remote])
+  fs.writeFileSync(path.join(remote, 'input.txt'), 'pinned input')
+  git(['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'add', '.'], { cwd: remote })
+  git(['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-m', 'initial'], { cwd: remote })
+  const commit = git(['rev-parse', 'HEAD'], { cwd: remote })
+  clone({ id: 'test-repository', type: 'git', url: remote, commit, path: '.cache/test-resource-clone/checkout' })
+  assert.equal(git(['rev-parse', 'HEAD'], { cwd: destination }), commit)
+  assert.equal(fs.readFileSync(path.join(destination, 'input.txt'), 'utf8'), 'pinned input')
 })
 
 test('extension identity and version checks apply to both input types', (t) => {

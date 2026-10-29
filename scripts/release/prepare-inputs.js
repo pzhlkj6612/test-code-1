@@ -16,17 +16,14 @@ async function download(resource) {
   if (!fs.existsSync(destination)) {
     const response = await fetch(resource.url, { signal: AbortSignal.timeout(600000) })
     if (!response.ok) throw new Error(`Download failed (${response.status}): ${resource.url}`)
-    const temporary = `${destination}.part`
-    try {
-      await pipeline(Readable.fromWeb(response.body), fs.createWriteStream(temporary))
-      const actual = await sha256(temporary)
-      if (actual !== resource.sha256) {
-        throw new Error(`Checksum mismatch for ${resource.id}: expected ${resource.sha256}, got ${actual}`)
-      }
-      fs.renameSync(temporary, destination)
-    } finally {
-      fs.rmSync(temporary, { force: true })
+    using directory = fs.mkdtempDisposableSync(path.join(path.dirname(destination), `.${path.basename(destination)}-`))
+    const temporary = path.join(directory.path, path.basename(destination))
+    await pipeline(Readable.fromWeb(response.body), fs.createWriteStream(temporary))
+    const actual = await sha256(temporary)
+    if (actual !== resource.sha256) {
+      throw new Error(`Checksum mismatch for ${resource.id}: expected ${resource.sha256}, got ${actual}`)
     }
+    fs.renameSync(temporary, destination)
   } else {
     const actual = await sha256(destination)
     if (actual !== resource.sha256) {

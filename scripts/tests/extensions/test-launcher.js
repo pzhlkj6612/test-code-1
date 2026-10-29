@@ -84,9 +84,7 @@ test('patch refuses missing, duplicate or changed upstream defaults', () => {
   }
 })
 
-function installation(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ruyi-integrity-'))
-  t.after(() => fs.rmSync(root, { recursive: true }))
+function installation(root) {
   const workbench = 'vs/workbench/workbench.desktop.main.js'
   const source = '"workbench.startupEditor":{type:"string",default:"welcomePage"}'
   fs.mkdirSync(path.join(root, 'out/vs/workbench'), { recursive: true })
@@ -98,8 +96,9 @@ function installation(t) {
   return { root, workbench, product, hash }
 }
 
-test('intentional patch updates only its checksum and preserves integrity checking', (t) => {
-  const { root, workbench, product, hash } = installation(t)
+test('intentional patch updates only its checksum and preserves integrity checking', () => {
+  using directory = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'ruyi-integrity-'))
+  const { root, workbench, product, hash } = installation(directory.path)
   patchInstallation(root)
   const updated = JSON.parse(fs.readFileSync(path.join(root, 'product.json'), 'utf8'))
   assert.equal(updated.checksums[workbench], hash(fs.readFileSync(path.join(root, 'out', workbench))))
@@ -109,16 +108,18 @@ test('intentional patch updates only its checksum and preserves integrity checki
   assert.deepEqual(Object.keys(updated.checksums), Object.keys(product.checksums))
 })
 
-test('unexpected modification is rejected rather than given a new checksum', (t) => {
-  const { root, workbench } = installation(t)
+test('unexpected modification is rejected rather than given a new checksum', () => {
+  using directory = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'ruyi-integrity-'))
+  const { root, workbench } = installation(directory.path)
   const before = fs.readFileSync(path.join(root, 'out', workbench), 'utf8')
   fs.writeFileSync(path.join(root, 'out/other.js'), 'unexpected modification')
   assert.throws(() => patchInstallation(root), /checksum mismatch.*other\.js/)
   assert.equal(fs.readFileSync(path.join(root, 'out', workbench), 'utf8'), before)
 })
 
-test('missing workbench integrity entry fails packaging', (t) => {
-  const { root, product, workbench } = installation(t)
+test('missing workbench integrity entry fails packaging', () => {
+  using directory = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'ruyi-integrity-'))
+  const { root, product, workbench } = installation(directory.path)
   delete product.checksums[workbench]
   fs.writeFileSync(path.join(root, 'product.json'), JSON.stringify(product))
   assert.throws(() => patchInstallation(root), /Missing workbench integrity checksum/)

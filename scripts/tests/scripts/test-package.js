@@ -30,12 +30,6 @@ const metadata = require('../../../config/product-overrides.json')
 
 const RELEASE_DIR = path.resolve(__dirname, '../../release')
 
-function temporary(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ruyi-package-'))
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
-  return root
-}
-
 function nativeHeader(target) {
   const bytes = Buffer.alloc(128)
   if (target.platform === 'linux') {
@@ -82,9 +76,11 @@ test('resource downloader verifies file hashes after fetching and removes mismat
   await once(server, 'listening')
   t.after(() => server.close())
   const root = path.resolve(__dirname, '../../..')
-  const destination = '.cache/test-resource-download.bin'
-  const file = path.join(root, destination)
-  t.after(() => fs.rmSync(file, { force: true }))
+  // The download must stay inside the workspace because resourcePath() rejects outside paths.
+  fs.mkdirSync(path.join(root, '.cache'), { recursive: true })
+  using directory = fs.mkdtempDisposableSync(path.join(root, '.cache/test-resource-download-'))
+  const file = path.join(directory.path, 'resource.bin')
+  const destination = path.relative(root, file)
   const resource = {
     id: 'download-test',
     type: 'file',
@@ -96,16 +92,17 @@ test('resource downloader verifies file hashes after fetching and removes mismat
   assert.deepEqual(fs.readFileSync(file), content)
   fs.rmSync(file)
   await assert.rejects(download({ ...resource, sha256: '0'.repeat(64) }), /Checksum mismatch/)
-  assert.equal(fs.existsSync(file), false)
-  assert.equal(fs.existsSync(`${file}.part`), false)
+  assert.deepEqual(fs.readdirSync(directory.path), [])
 })
 
-test('resource preparer clones and checks out the configured commit', (t) => {
+test('resource preparer clones and checks out the configured commit', () => {
+  using remoteDirectory = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'ruyi-clone-remote-'))
+  const remote = remoteDirectory.path
   // The checkout must stay inside the workspace because resourcePath() rejects outside paths.
-  const remote = path.join(temporary(t), 'remote')
-  const local = path.resolve(__dirname, '../../../.cache/test-resource-clone')
-  fs.mkdirSync(remote, { recursive: true })
-  t.after(() => fs.rmSync(local, { recursive: true, force: true }))
+  const root = path.resolve(__dirname, '../../..')
+  fs.mkdirSync(path.join(root, '.cache'), { recursive: true })
+  using localDirectory = fs.mkdtempDisposableSync(path.join(root, '.cache/test-resource-clone-'))
+  const local = path.join(localDirectory.path, 'checkout')
   const git = (args, options = {}) => {
     const result = spawnSync('git', args, { encoding: 'utf8', ...options })
     assert.equal(result.status, 0, result.stderr)
@@ -116,13 +113,14 @@ test('resource preparer clones and checks out the configured commit', (t) => {
   git(['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'add', '.'], { cwd: remote })
   git(['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-m', 'initial'], { cwd: remote })
   const commit = git(['rev-parse', 'HEAD'], { cwd: remote })
-  clone({ id: 'test-repository', type: 'git', url: remote, commit, path: '.cache/test-resource-clone' })
+  clone({ id: 'test-repository', type: 'git', url: remote, commit, path: path.relative(root, local) })
   assert.equal(git(['rev-parse', 'HEAD'], { cwd: local }), commit)
   assert.equal(fs.readFileSync(path.join(local, 'input.txt'), 'utf8'), 'pinned input')
 })
 
-test('extension identity and version checks apply to both input types', (t) => {
-  const directory = temporary(t)
+test('extension identity and version checks apply to both input types', () => {
+  using directoryDirectory = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'ruyi-extension-'))
+  const directory = directoryDirectory.path
   for (const extension of config.extensions) {
     const [publisher, name] = extension.id.split('.')
     const manifest = { publisher, name, version: extension.version }
@@ -136,8 +134,9 @@ test('extension identity and version checks apply to both input types', (t) => {
   }
 })
 
-test('both VSIX inputs install on every target with verified backends and executable permissions', (t) => {
-  const root = temporary(t)
+test('both VSIX inputs install on every target with verified backends and executable permissions', () => {
+  using rootDirectory = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'ruyi-install-extensions-'))
+  const root = rootDirectory.path
   const cache = path.join(root, 'cache')
   fs.mkdirSync(cache)
   const source = config.extensions.find((extension) => extension.source === 'build')
@@ -265,8 +264,9 @@ test('Linux and Windows CLI wrappers point at the renamed binary and preserve ar
   assert.throws(() => replaceLauncher('changed upstream', 'win32'), /launcher changed/)
 })
 
-test('native binary headers match every requested architecture', (t) => {
-  const root = temporary(t)
+test('native binary headers match every requested architecture', () => {
+  using rootDirectory = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'ruyi-native-headers-'))
+  const root = rootDirectory.path
   for (const target of TARGETS) {
     const file = path.join(root, `${target.platform}-${target.arch}`)
     fs.writeFileSync(file, nativeHeader(target))
@@ -278,8 +278,9 @@ test('native binary headers match every requested architecture', (t) => {
   }
 })
 
-test('macOS executable is resolved from Info.plist rather than assumed to be Electron', (t) => {
-  const app = temporary(t)
+test('macOS executable is resolved from Info.plist rather than assumed to be Electron', () => {
+  using appDirectory = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'ruyi-mac-app-'))
+  const app = appDirectory.path
   const contents = path.join(app, 'Contents')
   fs.mkdirSync(path.join(contents, 'MacOS'), { recursive: true })
   const plist = path.join(contents, 'Info.plist')
@@ -315,8 +316,9 @@ test('macOS executable is resolved from Info.plist rather than assumed to be Ele
   assert.throws(() => macExecutable(app), /Cannot read CFBundleExecutable/)
 })
 
-test('shared overlay patches integrity and bundles the home launcher for all platforms', (t) => {
-  const root = temporary(t)
+test('shared overlay patches integrity and bundles the home launcher for all platforms', () => {
+  using rootDirectory = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'ruyi-overlay-'))
+  const root = rootDirectory.path
   const iconNames = ['code-icon.svg', 'vscode-icon.svg',
     'letterpress-light.svg', 'letterpress-dark.svg', 'letterpress-hcLight.svg', 'letterpress-hcDark.svg']
   generateIcons()
@@ -378,8 +380,9 @@ test('shared overlay patches integrity and bundles the home launcher for all pla
   }
 })
 
-test('Linux rebrand preserves executable mode and supplies the desktop entry', (t) => {
-  const app = temporary(t)
+test('Linux rebrand preserves executable mode and supplies the desktop entry', () => {
+  using appDirectory = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'ruyi-rebrand-linux-'))
+  const app = appDirectory.path
   fs.mkdirSync(path.join(app, 'bin'))
   fs.writeFileSync(path.join(app, 'codium'), 'binary', { mode: 0o755 })
   fs.writeFileSync(path.join(app, 'bin/codium'), '#!/bin/sh\n"$VSCODE_PATH/codium" "$@"', { mode: 0o755 })
@@ -389,8 +392,9 @@ test('Linux rebrand preserves executable mode and supplies the desktop entry', (
   assert.match(fs.readFileSync(path.join(app, 'ruyisdk-ide.desktop'), 'utf8'), /Name=RuyiSDK IDE/)
 })
 
-test('Windows rebrand renames both CLI wrappers and the executable', (t) => {
-  const app = temporary(t)
+test('Windows rebrand renames both CLI wrappers and the executable', () => {
+  using appDirectory = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'ruyi-rebrand-win32-'))
+  const app = appDirectory.path
   fs.mkdirSync(path.join(app, 'bin'))
   fs.writeFileSync(path.join(app, 'VSCodium.exe'), 'binary')
   for (const suffix of ['', '.cmd']) fs.writeFileSync(path.join(app, `bin/codium${suffix}`), '"../VSCodium.exe"')
@@ -401,8 +405,9 @@ test('Windows rebrand renames both CLI wrappers and the executable', (t) => {
   }
 })
 
-test('publication requires exactly six nonempty packages with matching portable checksums', async (t) => {
-  const directory = temporary(t)
+test('publication requires exactly six nonempty packages with matching portable checksums', async () => {
+  using directoryDirectory = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'ruyi-release-assets-'))
+  const directory = directoryDirectory.path
   const version = config.releaseVersion
   for (const target of TARGETS) {
     const name = outputAsset(target, version)
@@ -434,13 +439,14 @@ test('manual releases require the default branch and the exact configured versio
   assert.throws(() => validateReleaseRequest('refs/heads/master', '9999.0.0', 'master'), /does not match/)
 })
 
-test('release preflight reads saved release state without network access', (t) => {
+test('release preflight reads saved release state without network access', () => {
   const state = { releaseExists: false, tagExists: false }
   assert.deepEqual(check(state), { include: TARGETS })
   assert.throws(() => check({ ...state, releaseExists: true }), /already exists/)
   assert.throws(() => check({ ...state, tagExists: true }), /already exists/)
   assert.throws(() => check({}), /Invalid release state/)
-  const directory = temporary(t)
+  using directoryDirectory = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'ruyi-release-state-'))
+  const directory = directoryDirectory.path
   const metadataFile = path.join(directory, 'release-state.json')
   const outputFile = path.join(directory, 'output')
   fs.writeFileSync(metadataFile, JSON.stringify(state))

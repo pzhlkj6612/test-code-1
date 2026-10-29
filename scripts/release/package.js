@@ -27,10 +27,10 @@ async function packageTarget(target) {
   const archive = resourcePath(input)
   if (!fs.existsSync(archive)) throw new Error(`Missing downloaded resource: ${input.id}`)
 
-  const build = path.join(ROOT, 'build', `${target.platform}-${target.arch}`)
-  fs.rmSync(build, { recursive: true, force: true })
+  fs.mkdirSync(path.join(ROOT, 'build'), { recursive: true })
+  using build = fs.mkdtempDisposableSync(path.join(ROOT, 'build', `${target.platform}-${target.arch}-`))
 
-  const extracted = path.join(build, 'app')
+  const extracted = path.join(build.path, 'app')
   fs.mkdirSync(extracted, { recursive: true })
   if (target.platform === 'linux') run('tar', ['-xzf', archive, '-C', extracted])
   else if (target.platform === 'darwin') run('ditto', ['-x', '-k', archive, extracted])
@@ -44,7 +44,7 @@ async function packageTarget(target) {
   verifyArchitecture(executable, target)
   generateIcons()
   overlay(appRoot, target)
-  installExtensions(appRoot, build, target)
+  installExtensions(appRoot, build.path, target)
   rebrand(appDir, appRoot, target)
 
   const bundledExtensions = config.extensions.map((extension) => {
@@ -68,8 +68,10 @@ ${macOSNotice}`
   const dist = path.join(ROOT, 'dist')
   fs.mkdirSync(dist, { recursive: true })
 
-  const output = path.join(dist, outputAsset(target, version))
-  fs.rmSync(output, { force: true })
+  const name = outputAsset(target, version)
+  // Stage in a temp hidden directory so a failed run never leaves stuff.
+  using staging = fs.mkdtempDisposableSync(path.join(dist, `.${name}-`))
+  const output = path.join(staging.path, name)
   if (target.platform === 'linux') run('tar', ['-czf', output, '-C', extracted, '.'])
   else if (target.platform === 'win32') {
     const zip = new AdmZip()
@@ -82,8 +84,11 @@ ${macOSNotice}`
     run('hdiutil', ['verify', output])
   }
 
-  fs.writeFileSync(`${output}.sha256`, `${await sha256(output)}  ${path.basename(output)}\n`)
-  console.log(`Packaged ${output}`)
+  fs.writeFileSync(`${output}.sha256`, `${await sha256(output)}  ${name}\n`)
+  const published = path.join(dist, name)
+  fs.renameSync(output, published)
+  fs.renameSync(`${output}.sha256`, `${published}.sha256`)
+  console.log(`Packaged ${published}`)
 }
 
 function parseArguments(argv, output) {

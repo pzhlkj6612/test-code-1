@@ -26,12 +26,6 @@ function rejects(parse, argv, code) {
   })
 }
 
-function temporary(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ruyi-cli-'))
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
-  return root
-}
-
 function runScript(script, args, env = process.env) {
   return spawnSync(process.execPath, [path.join(RELEASE_DIR, script), ...args], { encoding: 'utf8', env })
 }
@@ -56,8 +50,9 @@ test('configure-workflow.js accepts the output file and optional release request
   rejects(parse, ['out', '--ref'], 'commander.optionMissingArgument')
 })
 
-test('configure-workflow.js validates manual release requests from arguments only', (t) => {
-  const directory = temporary(t)
+test('configure-workflow.js validates manual release requests from arguments only', () => {
+  using directoryDirectory = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'ruyi-workflow-output-'))
+  const directory = directoryDirectory.path
   const output = path.join(directory, 'workflow-output.txt')
   const matrix = `matrix=${JSON.stringify({ include: TARGETS })}\n`
   const run = (args, env) => {
@@ -121,9 +116,10 @@ test('release.js accepts exactly the check, verify and notes commands', () => {
   rejects(parse, ['notes', '--version', '9.9.9', 'notes.md'], 'commander.unknownOption')
 })
 
-test('release.js commands write their outputs', async (t) => {
+test('release.js commands write their outputs', async () => {
   const { main } = require('../../release/release')
-  const directory = temporary(t)
+  using directoryDirectory = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'ruyi-release-output-'))
+  const directory = directoryDirectory.path
   const notes = path.join(directory, 'notes.md')
   await main(['notes', notes])
   assert.match(fs.readFileSync(notes, 'utf8'), new RegExp(`RuyiSDK IDE ${config.releaseVersion.replaceAll('.', '\\.')}`))
@@ -193,8 +189,9 @@ test('argument-free scripts reject any arguments', () => {
   }
 })
 
-test('CLI argument errors exit with status 1 before doing any work', (t) => {
-  const directory = temporary(t)
+test('CLI argument errors exit with status 1 before doing any work', () => {
+  using directoryDirectory = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'ruyi-cli-errors-'))
+  const directory = directoryDirectory.path
   for (const [script, args] of [
     ['configure-workflow.js', []],
     ['release.js', ['notes', path.join(directory, 'notes.md'), 'extra']],

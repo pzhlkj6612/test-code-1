@@ -2,6 +2,7 @@
 'use strict'
 
 const fs = require('node:fs')
+const os = require('node:os')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
 const { patchInstallation } = require('./patch-startup-default')
@@ -132,7 +133,9 @@ Icon=%k/resources/app/resources/linux/code.png
       run('/usr/libexec/PlistBuddy', ['-c', `Set :${key} ${value}`, plist])
     }
 
-    const iconset = path.join(path.dirname(appDir), 'ruyisdk-ide.iconset')
+    using temporary = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'ruyisdk-ide-icons-'))
+    // iconutil requires the input directory name to end in .iconset.
+    const iconset = path.join(temporary.path, 'ruyisdk-ide.iconset')
     fs.mkdirSync(iconset)
     for (const size of [16, 32, 128, 256, 512]) {
       for (const scale of [1, 2]) {
@@ -151,8 +154,6 @@ Icon=%k/resources/app/resources/linux/code.png
     // An ad-hoc seal is required on Apple Silicon; it is NOT Developer ID signing.
     run('codesign', ['--force', '--deep', '--sign', '-', '--preserve-metadata=entitlements', appDir])
     run('codesign', ['--verify', '--deep', '--strict', appDir])
-
-    fs.rmSync(iconset, { recursive: true })
   }
 }
 

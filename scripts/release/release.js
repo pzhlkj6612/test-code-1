@@ -10,8 +10,11 @@ const { sha256 } = require('./utils')
 const { validateExtensions } = require('./package-extensions')
 const { createProgram, runCli } = require('./cli')
 
-function validateReleaseRequest(ref, version) {
-  if (ref !== 'refs/heads/main') throw new Error('Manual releases must run on the main branch')
+function validateReleaseRequest(ref, version, defaultBranch) {
+  if (typeof defaultBranch !== 'string' || !defaultBranch) throw new Error('Default branch is required')
+  if (ref !== `refs/heads/${defaultBranch}`) {
+    throw new Error(`Manual releases must run on the default branch ${defaultBranch}`)
+  }
   validateVersion(version)
   if (version !== config.releaseVersion) {
     throw new Error(`Requested version ${version} does not match configured releaseVersion ${config.releaseVersion}`)

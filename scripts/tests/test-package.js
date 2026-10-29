@@ -416,15 +416,20 @@ test('publication requires exactly six nonempty packages with matching portable 
   await assert.rejects(verifyArtifacts(directory), /exactly six/)
 })
 
-test('manual releases require main and the exact configured version', () => {
-  assert.doesNotThrow(() => validateReleaseRequest('refs/heads/main', config.releaseVersion))
-  for (const ref of ['refs/heads/feature', 'refs/tags/main', 'refs/tags/0.1.6', '', undefined]) {
-    assert.throws(() => validateReleaseRequest(ref, config.releaseVersion), /main branch/)
+test('manual releases require the default branch and the exact configured version', () => {
+  assert.doesNotThrow(() => validateReleaseRequest('refs/heads/master', config.releaseVersion, 'master'))
+  assert.doesNotThrow(() => validateReleaseRequest('refs/heads/main', config.releaseVersion, 'main'))
+  for (const ref of ['refs/heads/feature', 'refs/heads/main', 'refs/tags/master', 'refs/tags/0.1.6', '', undefined]) {
+    assert.throws(() => validateReleaseRequest(ref, config.releaseVersion, 'master'), /default branch master/)
+  }
+  for (const defaultBranch of ['', undefined]) {
+    assert.throws(() => validateReleaseRequest('refs/heads/master', config.releaseVersion, defaultBranch),
+      /Default branch is required/)
   }
   for (const version of ['', undefined, `v${config.releaseVersion}`, '../version']) {
-    assert.throws(() => validateReleaseRequest('refs/heads/main', version), /Invalid release version/)
+    assert.throws(() => validateReleaseRequest('refs/heads/master', version, 'master'), /Invalid release version/)
   }
-  assert.throws(() => validateReleaseRequest('refs/heads/main', '9999.0.0'), /does not match/)
+  assert.throws(() => validateReleaseRequest('refs/heads/master', '9999.0.0', 'master'), /does not match/)
 })
 
 test('release preflight reads saved release state without network access', (t) => {

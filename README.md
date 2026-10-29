@@ -36,8 +36,8 @@ The [CI workflow](.github/workflows/ci.yml) checks commit sign-offs (DCO), lints
 
 Releases are manual; pushes and pull requests never publish.
 
-1. Update `releaseVersion` and pinned resources in [config/release.json](config/release.json). Add each downloadable file with its URL and SHA-256, and each Git repository with its URL and commit, then merge the changes into `main`.
-2. In GitHub Actions, select **CI**, choose **Run workflow** on `main`, and enter the exact configured version without a `v` prefix.
+1. Update `releaseVersion` and pinned resources in [config/release.json](config/release.json). Add each downloadable file with its URL and SHA-256, and each Git repository with its URL and commit, then merge the changes into the default branch.
+2. In GitHub Actions, select **CI**, choose **Run workflow** on the default branch, and enter the exact configured version without a `v` prefix.
 3. Alternatively, dispatch `ci.yml` through the GitHub REST API with `ref: "main"` and `inputs: {"version": "0.1.6"}` (replace the example version with the configured version).
 
 Manual runs reject other branches, mismatched versions, existing release versions or tags before building. GitHub release state is retrieved with Octokit in the workflow and saved as an intermediate file for the offline preflight script. Pinned file downloads and repository clones are described in the same provider-neutral resource list; the generic scripts can fetch all file resources or clone all repository resources in advance. File checksums are verified by the downloader. DCO applies to push and pull-request commits; manual dispatch does not introduce commits and skips that check. Release runs are serialized.

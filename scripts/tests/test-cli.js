@@ -38,13 +38,15 @@ function runScript(script, args, env = process.env) {
 
 test('configure-workflow.js accepts the output file and optional release request options', () => {
   const parse = parser('configure-workflow.js')
-  assert.deepEqual(parse(['out']), { output: 'out', event: '', ref: '', requestedVersion: '' })
-  const expected = { output: 'out', event: 'workflow_dispatch', ref: 'refs/heads/main', requestedVersion: '1.2.3' }
-  assert.deepEqual(parse(['--event', 'workflow_dispatch', '--ref', 'refs/heads/main',
+  assert.deepEqual(parse(['out']), { output: 'out', event: '', ref: '', defaultBranch: '', requestedVersion: '' })
+  const expected = {
+    output: 'out', event: 'workflow_dispatch', ref: 'refs/heads/master', defaultBranch: 'master', requestedVersion: '1.2.3',
+  }
+  assert.deepEqual(parse(['--event', 'workflow_dispatch', '--ref', 'refs/heads/master', '--default-branch', 'master',
     '--requested-version', '1.2.3', 'out']), expected)
-  assert.deepEqual(parse(['--event=workflow_dispatch', '--ref=refs/heads/main',
+  assert.deepEqual(parse(['--event=workflow_dispatch', '--ref=refs/heads/master', '--default-branch=master',
     '--requested-version=1.2.3', '--', 'out']), expected)
-  assert.deepEqual(parse(['out', '--requested-version=']), { output: 'out', event: '', ref: '', requestedVersion: '' })
+  assert.deepEqual(parse(['out', '--requested-version=']), { output: 'out', event: '', ref: '', defaultBranch: '', requestedVersion: '' })
   // Workflow-supplied values are passed with "=" so dashes cannot become options.
   assert.equal(parse(['--requested-version=--event', 'out']).requestedVersion, '--event')
   assert.equal(parse(['--', '--out']).output, '--out')
@@ -67,7 +69,10 @@ test('configure-workflow.js validates manual release requests from arguments onl
     [],
     ['--event=workflow_dispatch', '--ref=refs/heads/feature', '--requested-version='],
     ['--event=push', '--ref=refs/heads/feature', `--requested-version=v${config.releaseVersion}`],
-    ['--event=workflow_dispatch', '--ref=refs/heads/main', `--requested-version=${config.releaseVersion}`],
+    ['--event=workflow_dispatch', '--ref=refs/heads/master', '--default-branch=master',
+      `--requested-version=${config.releaseVersion}`],
+    ['--event=workflow_dispatch', '--ref=refs/heads/main', '--default-branch=main',
+      `--requested-version=${config.releaseVersion}`],
   ]) {
     const result = run(args)
     assert.equal(result.status, 0, result.stderr)
@@ -75,9 +80,16 @@ test('configure-workflow.js validates manual release requests from arguments onl
   }
 
   for (const [args, message] of [
-    [['--event=workflow_dispatch', '--ref=refs/heads/feature', `--requested-version=${config.releaseVersion}`], /main branch/],
-    [['--event=workflow_dispatch', '--ref=refs/heads/main', '--requested-version=9999.0.0'], /does not match/],
-    [['--event=workflow_dispatch', '--ref=refs/heads/main', '--requested-version=../1.2.3'], /Invalid release version/],
+    [['--event=workflow_dispatch', '--ref=refs/heads/feature', '--default-branch=master',
+      `--requested-version=${config.releaseVersion}`], /default branch master/],
+    [['--event=workflow_dispatch', '--ref=refs/heads/main', '--default-branch=master',
+      `--requested-version=${config.releaseVersion}`], /default branch master/],
+    [['--event=workflow_dispatch', '--ref=refs/heads/master', `--requested-version=${config.releaseVersion}`],
+      /Default branch is required/],
+    [['--event=workflow_dispatch', '--ref=refs/heads/master', '--default-branch=master',
+      '--requested-version=9999.0.0'], /does not match/],
+    [['--event=workflow_dispatch', '--ref=refs/heads/master', '--default-branch=master',
+      '--requested-version=../1.2.3'], /Invalid release version/],
   ]) {
     const result = run(args)
     assert.equal(result.status, 1)

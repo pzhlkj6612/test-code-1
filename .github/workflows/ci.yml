@@ -46,11 +46,13 @@ jobs:
         env:
           RUN_EVENT: ${{ github.event_name }}
           RUN_REF: ${{ github.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           REQUESTED_VERSION: ${{ inputs.version }}
         run: >-
           node scripts/release/configure-workflow.js
           --event="$RUN_EVENT"
           --ref="$RUN_REF"
+          --default-branch="$DEFAULT_BRANCH"
           --requested-version="$REQUESTED_VERSION"
           -- "$GITHUB_OUTPUT"
 
@@ -222,7 +224,7 @@ jobs:
 
   publish:
     name: Publish complete release
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.version != ''
+    if: github.event_name == 'workflow_dispatch' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && inputs.version != ''
     needs: [configure, dco, check, package]
     runs-on: ubuntu-22.04
     timeout-minutes: 30

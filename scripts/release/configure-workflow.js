@@ -12,15 +12,16 @@ function parseArguments(argv, output) {
     .argument('<output-file>', 'GitHub Actions output file to append the matrix to')
     .option('--event <name>', 'triggering GitHub event name', '')
     .option('--ref <ref>', 'triggering Git ref', '')
+    .option('--default-branch <name>', 'repository default branch that manual releases must run on', '')
     .option('--requested-version <version>', 'release version requested by a manual run', '')
   program.parse(argv, { from: 'user' })
   return { output: program.args[0], ...program.opts() }
 }
 
 function main(argv) {
-  const { output, event, ref, requestedVersion } = parseArguments(argv)
+  const { output, event, ref, defaultBranch, requestedVersion } = parseArguments(argv)
   validateResources()
-  if (event === 'workflow_dispatch' && requestedVersion) validateReleaseRequest(ref, requestedVersion)
+  if (event === 'workflow_dispatch' && requestedVersion) validateReleaseRequest(ref, requestedVersion, defaultBranch)
   fs.appendFileSync(output, `matrix=${JSON.stringify({ include: TARGETS })}\n`)
 }
 

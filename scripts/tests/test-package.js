@@ -424,6 +424,22 @@ test('manual releases require main and the exact configured version', () => {
   assert.throws(() => validateReleaseRequest('refs/heads/main', '9999.0.0'), /does not match/)
 })
 
+test('manual CI runs without a version skip release validation', (t) => {
+  const output = path.join(temporary(t), 'workflow-output.txt')
+  const script = path.resolve(__dirname, '../release/configure-workflow.js')
+  const result = spawnSync(process.execPath, [script, output], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      RUN_EVENT: 'workflow_dispatch',
+      RUN_REF: 'refs/heads/feature',
+      REQUESTED_VERSION: '',
+    },
+  })
+  assert.equal(result.status, 0, result.stderr)
+  assert.match(fs.readFileSync(output, 'utf8'), /^matrix=/)
+})
+
 test('release preflight reads saved release state without network access', (t) => {
   const state = { releaseExists: false, tagExists: false }
   assert.deepEqual(check(state), { include: TARGETS })

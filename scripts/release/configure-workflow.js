@@ -6,7 +6,7 @@ const { TARGETS, validateResources } = require('./package-utils')
 const { validateReleaseRequest } = require('./release')
 
 validateResources()
-if (process.env.RUN_EVENT === 'workflow_dispatch') {
+if (process.env.RUN_EVENT === 'workflow_dispatch' && process.env.REQUESTED_VERSION) {
   validateReleaseRequest(process.env.RUN_REF, process.env.REQUESTED_VERSION)
 }
 const output = process.argv[2]

@@ -30,20 +30,20 @@ CI packages the following architectures:
 
 Download packages from GitHub Releases when available; IDE updates are manual. macOS builds are ad-hoc signed, not notarized; Windows executables retain upstream icons and version resources.
 
-The [CI workflow](.github/workflows/ci.yml) checks commit sign-offs (DCO), lints JavaScript, runs tests, and builds all six packages on branch pushes and pull requests. Packages and SHA-256 checksums are available as workflow artifacts for seven days. Bundled extensions are prepared once and shared by the packaging jobs.
+The [CI workflow](.github/workflows/ci.yml) uploads packages and their SHA-256 checksums as workflow artifacts.
 
 ### Publishing a release
 
 Releases are manual; pushes and pull requests never publish.
 
-1. Update `releaseVersion` and pinned resources in [config/release.json](config/release.json). Add each downloadable file with its URL and SHA-256, and each Git repository with its URL and commit, then merge the changes into the default branch.
+1. Update `releaseVersion` and pinned resources in [config/release.json](config/release.json), then merge into the default branch.
 2. In GitHub Actions, select **CI**, choose **Run workflow** on the default branch, and enter the exact configured version without a `v` prefix.
-3. Alternatively, dispatch `ci.yml` through the GitHub REST API with `ref: "main"` and `inputs: {"version": "0.1.6"}` (replace the example version with the configured version).
 
-Manual runs reject other branches, mismatched versions, existing release versions or tags before building. GitHub release state is retrieved with Octokit in the workflow and saved as an intermediate file for the offline preflight script. Pinned file downloads and repository clones are described in the same provider-neutral resource list; the generic scripts can fetch all file resources or clone all repository resources in advance. File checksums are verified by the downloader. DCO applies to push and pull-request commits; manual dispatch does not introduce commits and skips that check. Release runs are serialized.
+Manual runs reject other branches, mismatched versions, and existing release versions or tags.
 
-To prefetch all configured dependencies for local work, run `node scripts/release/prepare-inputs.js all`. Use `extensions` to prepare just extension inputs, or `target <platform> <arch>` for a single packaging target. Every script under `scripts/release/` prints its usage with `--help`. The scripts read no environment variables; the workflow passes event data into `env:` and forwards it to the scripts as quoted command-line arguments.
+### Local scripts
 
-App icons are generated from [icons/source/icon.png](icons/source/icon.png) into the untracked `icons/generated/` directory. `package.js` and the script tests regenerate them automatically; run `node scripts/release/generate-icons.js` to produce them manually.
-
-After lint, tests, and all six packaging jobs succeed, the publishing job downloads those same artifacts, verifies that all packages and checksums are present and correct, then publishes them with `softprops/action-gh-release`. It does not rebuild the packages. Only the publishing job has permission to write repository contents.
+- `node scripts/release/prepare-inputs.js all` prefetches all configured dependencies; use `extensions` or `target <platform> <arch>` to narrow it.
+- `node scripts/release/generate-icons.js` generates app icons from [icons/source/icon.png](icons/source/icon.png) into the untracked `icons/generated/` directory (`package.js` and the tests do this automatically).
+- Every script under `scripts/release/` prints its usage with `--help`.
+- No script reads environment variables. Always use arguments.

@@ -122,7 +122,7 @@ test('release.js commands write their outputs', async () => {
   assert.match(fs.readFileSync(notes, 'utf8'), new RegExp(`RuyiSDK IDE ${config.releaseVersion.replaceAll('.', '\\.')}`))
   const assets = path.join(directory, 'assets')
   fs.mkdirSync(assets)
-  await assert.rejects(main(['verify', assets]), /exactly six/)
+  await assert.rejects(main(['verify', assets]), /Expected packages and checksums/)
 })
 
 test('package.js accepts exactly one supported platform and architecture', () => {

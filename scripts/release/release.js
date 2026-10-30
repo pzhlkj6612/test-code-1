@@ -49,7 +49,7 @@ async function verifyArtifacts(directory) {
   }).sort()
   const actual = fs.readdirSync(directory).sort()
   if (!isDeepStrictEqual(actual, expected)) {
-    throw new Error(`Expected exactly six packages and six checksums; found: ${actual.join(', ')}`)
+    throw new Error(`Expected packages and checksums: ${expected.join(', ')}; found: ${actual.join(', ')}`)
   }
   for (const target of TARGETS) {
     const name = outputAsset(target, version)
@@ -81,7 +81,7 @@ Includes the RuyiSDK IDE home launcher and:
 
 ${extensionsList}
 
-All six packages include SHA-256 checksums.
+All packages include SHA-256 checksums.
 
 **macOS arm64: the DMG is unsigned/unnotarized (the app has only an ad-hoc signature). Gatekeeper may block it.**
 Windows ZIPs retain upstream executable icons and embedded version resources.

@@ -409,7 +409,7 @@ test('Windows rebrand renames both CLI wrappers and the executable', () => {
   }
 })
 
-test('publication requires exactly six nonempty packages with matching portable checksums', async () => {
+test('publication requires all nonempty packages with matching portable checksums', async () => {
   using directoryDirectory = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'ruyi-release-assets-'))
   const directory = directoryDirectory.path
   const version = config.releaseVersion
@@ -424,7 +424,7 @@ test('publication requires exactly six nonempty packages with matching portable 
   fs.writeFileSync(path.join(directory, name), 'corrupted')
   await assert.rejects(verifyArtifacts(directory), /checksum mismatch/)
   fs.rmSync(path.join(directory, name))
-  await assert.rejects(verifyArtifacts(directory), /exactly six/)
+  await assert.rejects(verifyArtifacts(directory), /Expected packages and checksums/)
 })
 
 test('manual releases require the default branch and the exact configured version', () => {

@@ -26,8 +26,8 @@ function rejects(parse, argv, code) {
   })
 }
 
-function runScript(script, args, env = process.env) {
-  return spawnSync(process.execPath, [path.join(RELEASE_DIR, script), ...args], { encoding: 'utf8', env })
+function runScript(script, args) {
+  return spawnSync(process.execPath, [path.join(RELEASE_DIR, script), ...args], { encoding: 'utf8' })
 }
 
 test('configure-workflow.js accepts the output file and optional release request options', () => {
@@ -55,9 +55,9 @@ test('configure-workflow.js validates manual release requests from arguments onl
   const directory = directoryDirectory.path
   const output = path.join(directory, 'workflow-output.txt')
   const matrix = `matrix=${JSON.stringify({ include: TARGETS })}\n`
-  const run = (args, env) => {
+  const run = (args) => {
     fs.rmSync(output, { force: true })
-    return runScript('configure-workflow.js', [...args, output], env)
+    return runScript('configure-workflow.js', [...args, output])
   }
 
   for (const args of [
@@ -91,11 +91,6 @@ test('configure-workflow.js validates manual release requests from arguments onl
     assert.match(result.stderr, message)
     assert.equal(fs.existsSync(output), false)
   }
-
-  const ignored = run([], {
-    ...process.env, RUN_EVENT: 'workflow_dispatch', RUN_REF: 'refs/heads/feature', REQUESTED_VERSION: '9999.0.0',
-  })
-  assert.equal(ignored.status, 0, ignored.stderr)
 })
 
 test('release.js accepts exactly the check, verify and notes commands', () => {

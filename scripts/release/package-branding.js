@@ -29,30 +29,36 @@ function patchProduct(product, identity = metadata) {
     product[key] = identity[key]
   }
   product.builtInExtensionsEnabledWithAutoUpdates = [...new Set([
-    ...product.builtInExtensionsEnabledWithAutoUpdates, ...validateExtensions().map((extension) => extension.id),
+    ...product.builtInExtensionsEnabledWithAutoUpdates, ...validateExtensions().map(extension => extension.id),
   ])]
   // Otherwisw, the upstream updater would install VSCodium over this downstream overlay.
   delete product.updateUrl
   for (const key of Object.keys(product)) {
-    if (/^win32.*AppId$/.test(key)) delete product[key]
+    if (/^win32.*AppId$/.test(key)) {
+      delete product[key]
+    }
   }
   return product
 }
 
 function replaceLauncher(source, platform) {
   if (platform === 'linux') {
-    if (!source.includes('$VSCODE_PATH/codium')) throw new Error('Upstream Linux launcher changed')
+    if (!source.includes('$VSCODE_PATH/codium')) {
+      throw new Error('Upstream Linux launcher changed')
+    }
     return source.replaceAll('$VSCODE_PATH/codium', `$VSCODE_PATH/${metadata.binaryName}`)
-      .replaceAll("'codium'", `'${metadata.binaryName}'`)
+      .replaceAll('\'codium\'', `'${metadata.binaryName}'`)
   }
   if (platform === 'win32') {
-    if (!/VSCodium\.exe|^NAME="VSCodium"\r?$/im.test(source)) throw new Error('Upstream Windows launcher changed')
+    if (!/VSCodium\.exe|^NAME="VSCodium"\r?$/im.test(source)) {
+      throw new Error('Upstream Windows launcher changed')
+    }
     return source.replace(/VSCodium\.exe/gi, `${metadata.binaryName}.exe`)
       .replace(/^NAME="VSCodium"(\r?)$/gm, `NAME="${metadata.binaryName}"$1`)
       .replace(/^APP_NAME="codium"(\r?)$/gm, `APP_NAME="${metadata.applicationName}"$1`)
       .replace(/^SERVERDATAFOLDER="[^"]+"(\r?)$/gm, `SERVERDATAFOLDER="${metadata.dataFolderName}-server"$1`)
   }
-  return source.replaceAll("'codium'", `'${metadata.binaryName}'`)
+  return source.replaceAll('\'codium\'', `'${metadata.binaryName}'`)
     .replace(/^APP_NAME="codium"(\r?)$/gm, `APP_NAME="${metadata.applicationName}"$1`)
 }
 
@@ -125,9 +131,9 @@ Icon=%k/resources/app/resources/linux/code.png
 
     const plist = path.join(appDir, 'Contents/Info.plist')
     for (const [key, value] of Object.entries({
-      CFBundleName: metadata.productName,
-      CFBundleDisplayName: metadata.productNameLong,
-      CFBundleIdentifier: metadata.darwinBundleIdentifier,
+      'CFBundleName': metadata.productName,
+      'CFBundleDisplayName': metadata.productNameLong,
+      'CFBundleIdentifier': metadata.darwinBundleIdentifier,
       'CFBundleURLTypes:0:CFBundleURLSchemes:0': metadata.urlProtocol,
     })) {
       run('/usr/libexec/PlistBuddy', ['-c', `Set :${key} ${value}`, plist])
@@ -145,10 +151,16 @@ Icon=%k/resources/app/resources/linux/code.png
     }
 
     const result = spawnSync('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleIconFile', plist], { encoding: 'utf8' })
-    if (result.error) throw result.error
-    if (result.status !== 0) throw new Error('Cannot read CFBundleIconFile')
+    if (result.error) {
+      throw result.error
+    }
+    if (result.status !== 0) {
+      throw new Error('Cannot read CFBundleIconFile')
+    }
     const icon = result.stdout.trim()
-    if (!/^[\w.-]+$/.test(icon)) throw new Error(`Unexpected bundle icon name: ${icon}`)
+    if (!/^[\w.-]+$/.test(icon)) {
+      throw new Error(`Unexpected bundle icon name: ${icon}`)
+    }
 
     run('iconutil', ['-c', 'icns', iconset, '-o', path.join(appDir, 'Contents/Resources', icon.endsWith('.icns') ? icon : `${icon}.icns`)])
     // An ad-hoc seal is required on Apple Silicon; it is NOT Developer ID signing.

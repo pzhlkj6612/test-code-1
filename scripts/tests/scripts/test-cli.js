@@ -11,11 +11,13 @@ const { TARGETS } = require('../../release/package-utils')
 const config = require('../../../config/release.json')
 
 const RELEASE_DIR = path.resolve(__dirname, '../../release')
-const quiet = { writeOut: () => {}, writeErr: () => {} }
+const quiet = { writeOut: () => {
+}, writeErr: () => {
+} }
 
 function parser(script) {
   const { parseArguments } = require(path.join(RELEASE_DIR, script))
-  return (argv) => parseArguments(argv, quiet)
+  return argv => parseArguments(argv, quiet)
 }
 
 function rejects(parse, argv, code) {
@@ -145,8 +147,8 @@ test('prepare-inputs.js selects all, extension or single-target resources', () =
   assert.deepEqual(parse(['all']), { selection: 'all' })
   assert.deepEqual(selectResources(parse(['all'])), config.resources)
   assert.deepEqual(parse(['extensions']), { selection: 'extensions' })
-  assert.deepEqual(selectResources(parse(['extensions'])).map((resource) => resource.id),
-    config.extensions.map((extension) => extension.resource))
+  assert.deepEqual(selectResources(parse(['extensions'])).map(resource => resource.id),
+    config.extensions.map(extension => extension.resource))
   for (const target of TARGETS) {
     const selection = parse(['target', '--', target.platform, target.arch])
     assert.deepEqual(selection, { selection: 'target', platform: target.platform, arch: target.arch })

@@ -14,8 +14,7 @@ async function activate() {
 
   try {
     await vscode.commands.executeCommand(TARGET_COMMAND)
-  }
-  catch (err) {
+  } catch (err) {
     console.warn(
       `[ruyisdk-ide.home-launcher] Could not run '${TARGET_COMMAND}'.`,
       err,
@@ -23,6 +22,7 @@ async function activate() {
   }
 }
 
-function deactivate() {}
+function deactivate() {
+}
 
 module.exports = { activate, deactivate }

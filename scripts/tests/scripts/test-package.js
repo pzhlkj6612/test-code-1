@@ -48,7 +48,7 @@ function nativeHeader(target) {
 }
 
 test('pinned resources and extension resource references are provider-neutral', () => {
-  assert.deepEqual(validateExtensions().map((extension) => extension.id), [
+  assert.deepEqual(validateExtensions().map(extension => extension.id), [
     'kendryte747.canmv-vscode', 'RuyiSDK.ruyisdk-vscode-extension',
   ])
   assert.equal(validateResources().length, 8)
@@ -139,7 +139,7 @@ test('both VSIX inputs install on every target with verified backends and execut
   const root = rootDirectory.path
   const cache = path.join(root, 'cache')
   fs.mkdirSync(cache)
-  const source = config.extensions.find((extension) => extension.source === 'build')
+  const source = config.extensions.find(extension => extension.source === 'build')
   const sourceCommit = resourceById(source.resource).commit
   const directories = new Map()
   function pack(extension) {
@@ -190,16 +190,16 @@ test('both VSIX inputs install on every target with verified backends and execut
   fs.rmSync(backend)
   pack(source)
   assert.throws(() => installExtensions(root, root, target, cache), /ENOENT/)
-  assert.equal(fs.readdirSync(root).some((name) => name.startsWith('vsix-')), false)
+  assert.equal(fs.readdirSync(root).some(name => name.startsWith('vsix-')), false)
 })
 
 test('release matrix maps all six targets to configured file resources', () => {
-  assert.deepEqual(TARGETS.map((t) => `${t.platform}-${t.arch}.${t.format}`), [
+  assert.deepEqual(TARGETS.map(t => `${t.platform}-${t.arch}.${t.format}`), [
     'darwin-arm64.dmg', 'win32-x64.zip', 'win32-arm64.zip',
     'linux-arm64.tar.gz', 'linux-x64.tar.gz', 'linux-riscv64.tar.gz',
   ])
   assert.throws(() => targetFor('linux', 'armhf'), /Unsupported target/)
-  assert.equal(config.resources.filter((resource) =>
+  assert.equal(config.resources.filter(resource =>
     resource.type === 'file' && resource.platform && resource.arch).length, TARGETS.length)
   for (const target of TARGETS) {
     const input = resourceForTarget(target)
@@ -212,7 +212,9 @@ test('release matrix maps all six targets to configured file resources', () => {
 })
 
 test('release version cannot inject paths, flags or shell syntax', () => {
-  for (const value of ['1.2.3', '1.135.06055-ruyi.1']) assert.equal(validateVersion(value), value)
+  for (const value of ['1.2.3', '1.135.06055-ruyi.1']) {
+    assert.equal(validateVersion(value), value)
+  }
   for (const value of ['', '../1.2.3', '--draft', 'v1.2.3', '1.2.3;echo', '1.2.3\n', undefined]) {
     assert.throws(() => validateVersion(value), /Invalid release version/)
   }
@@ -362,7 +364,7 @@ test('shared overlay patches integrity and bundles the home launcher for all pla
       ['RuyiSDK Dark', 'ruyisdk-dark-color-theme.json', 'dark', '#101820', '#E6B85C'],
       ['RuyiSDK Light', 'ruyisdk-light-color-theme.json', 'light', '#F7F8FA', '#9A6A12'],
     ]) {
-      const contribution = themeExtension.contributes.themes.find((theme) => theme.label === label)
+      const contribution = themeExtension.contributes.themes.find(theme => theme.label === label)
       assert.ok(contribution, `${label} must be contributed`)
       assert.equal(contribution.uiTheme, type === 'dark' ? 'vs-dark' : 'vs')
       const themePath = path.join(themeRoot, 'themes', file)
@@ -397,7 +399,9 @@ test('Windows rebrand renames both CLI wrappers and the executable', () => {
   const app = appDirectory.path
   fs.mkdirSync(path.join(app, 'bin'))
   fs.writeFileSync(path.join(app, 'VSCodium.exe'), 'binary')
-  for (const suffix of ['', '.cmd']) fs.writeFileSync(path.join(app, `bin/codium${suffix}`), '"../VSCodium.exe"')
+  for (const suffix of ['', '.cmd']) {
+    fs.writeFileSync(path.join(app, `bin/codium${suffix}`), '"../VSCodium.exe"')
+  }
   rebrand(app, path.join(app, 'resources/app'), targetFor('win32', 'arm64'))
   assert.ok(fs.existsSync(path.join(app, 'ruyisdk-ide.exe')))
   for (const suffix of ['', '.cmd']) {

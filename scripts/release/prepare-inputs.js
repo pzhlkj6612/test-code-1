@@ -15,7 +15,9 @@ async function download(resource) {
   fs.mkdirSync(path.dirname(destination), { recursive: true })
   if (!fs.existsSync(destination)) {
     const response = await fetch(resource.url, { signal: AbortSignal.timeout(600000) })
-    if (!response.ok) throw new Error(`Download failed (${response.status}): ${resource.url}`)
+    if (!response.ok) {
+      throw new Error(`Download failed (${response.status}): ${resource.url}`)
+    }
     using directory = fs.mkdtempDisposableSync(path.join(path.dirname(destination), `.${path.basename(destination)}-`))
     const temporary = path.join(directory.path, path.basename(destination))
     await pipeline(Readable.fromWeb(response.body), fs.createWriteStream(temporary))
@@ -60,7 +62,9 @@ function clone(resource) {
   const commit = execFileSync('git', ['-C', checkout, 'rev-parse', 'HEAD'], {
     encoding: 'utf8',
   }).trim()
-  if (commit !== resource.commit) throw new Error(`Expected ${resource.commit}, checked out ${commit}`)
+  if (commit !== resource.commit) {
+    throw new Error(`Expected ${resource.commit}, checked out ${commit}`)
+  }
 
   fs.renameSync(checkout, destination)
 }
@@ -71,28 +75,38 @@ function parseArguments(argv, output) {
     'Download and verify pinned files, and clone pinned repositories, from config/release.json', output)
   program.command('all')
     .description('prepare every configured resource')
-    .action(() => { parsed = { selection: 'all' } })
+    .action(() => {
+      parsed = { selection: 'all' }
+    })
   program.command('extensions')
     .description('prepare resources referenced by bundled extensions')
-    .action(() => { parsed = { selection: 'extensions' } })
+    .action(() => {
+      parsed = { selection: 'extensions' }
+    })
   program.command('target')
     .description('prepare the upstream archive for one packaging target')
     .argument('<platform>', 'target platform')
     .argument('<arch>', 'target architecture')
-    .action((platform, arch) => { parsed = { selection: 'target', platform, arch } })
+    .action((platform, arch) => {
+      parsed = { selection: 'target', platform, arch }
+    })
   program.parse(argv, { from: 'user' })
   return parsed
 }
 
 function selectResources({ selection, platform, arch }) {
-  if (selection === 'all') return config.resources
-  if (selection === 'extensions') {
-    const ids = new Set(config.extensions.map((extension) => extension.resource))
-    return config.resources.filter((resource) => ids.has(resource.id))
+  if (selection === 'all') {
+    return config.resources
   }
-  const matches = config.resources.filter((resource) =>
+  if (selection === 'extensions') {
+    const ids = new Set(config.extensions.map(extension => extension.resource))
+    return config.resources.filter(resource => ids.has(resource.id))
+  }
+  const matches = config.resources.filter(resource =>
     resource.type === 'file' && resource.platform === platform && resource.arch === arch)
-  if (matches.length !== 1) throw new Error(`No file resource for ${platform}-${arch}`)
+  if (matches.length !== 1) {
+    throw new Error(`No file resource for ${platform}-${arch}`)
+  }
   return matches
 }
 
@@ -100,11 +114,16 @@ async function main(argv) {
   const selection = parseArguments(argv)
   validateResources()
   for (const resource of selectResources(selection)) {
-    if (resource.type === 'file') await download(resource)
-    else clone(resource)
+    if (resource.type === 'file') {
+      await download(resource)
+    } else {
+      clone(resource)
+    }
   }
 }
 
-if (require.main === module) runCli(main)
+if (require.main === module) {
+  runCli(main)
+}
 
 module.exports = { download, clone, parseArguments, selectResources, main }

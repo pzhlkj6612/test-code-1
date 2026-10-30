@@ -19,27 +19,37 @@ async function packageTarget(target) {
   const version = config.releaseVersion
   validateVersion(version)
   const requiredHost = target.platform === 'darwin' ? 'darwin' : target.platform === 'win32' ? 'win32' : 'linux'
-  if (process.platform !== requiredHost) throw new Error(`Package ${target.platform} on a ${requiredHost} host`)
+  if (process.platform !== requiredHost) {
+    throw new Error(`Package ${target.platform} on a ${requiredHost} host`)
+  }
 
   const cache = path.join(ROOT, '.cache')
   fs.mkdirSync(cache, { recursive: true })
   const input = resourceForTarget(target)
   const archive = resourcePath(input)
-  if (!fs.existsSync(archive)) throw new Error(`Missing downloaded resource: ${input.id}`)
+  if (!fs.existsSync(archive)) {
+    throw new Error(`Missing downloaded resource: ${input.id}`)
+  }
 
   fs.mkdirSync(path.join(ROOT, 'build'), { recursive: true })
   using build = fs.mkdtempDisposableSync(path.join(ROOT, 'build', `${target.platform}-${target.arch}-`))
 
   const extracted = path.join(build.path, 'app')
   fs.mkdirSync(extracted, { recursive: true })
-  if (target.platform === 'linux') run('tar', ['-xzf', archive, '-C', extracted])
-  else if (target.platform === 'darwin') run('ditto', ['-x', '-k', archive, extracted])
-  else new AdmZip(archive).extractAllTo(extracted, true)
+  if (target.platform === 'linux') {
+    run('tar', ['-xzf', archive, '-C', extracted])
+  } else if (target.platform === 'darwin') {
+    run('ditto', ['-x', '-k', archive, extracted])
+  } else {
+    new AdmZip(archive).extractAllTo(extracted, true)
+  }
   const appDir = target.platform === 'darwin'
-    ? path.join(extracted, 'VSCodium.app') : extracted
+    ? path.join(extracted, 'VSCodium.app')
+    : extracted
 
   const appRoot = path.join(appDir, target.platform === 'darwin' ? 'Contents/Resources/app' : 'resources/app')
-  const executable = target.platform === 'darwin' ? macExecutable(appDir)
+  const executable = target.platform === 'darwin'
+    ? macExecutable(appDir)
     : path.join(appDir, target.platform === 'win32' ? 'VSCodium.exe' : 'codium')
   verifyArchitecture(executable, target)
   generateIcons()
@@ -72,8 +82,9 @@ ${macOSNotice}`
   // Stage in a temp hidden directory so a failed run never leaves stuff.
   using staging = fs.mkdtempDisposableSync(path.join(dist, `.${name}-`))
   const output = path.join(staging.path, name)
-  if (target.platform === 'linux') run('tar', ['-czf', output, '-C', extracted, '.'])
-  else if (target.platform === 'win32') {
+  if (target.platform === 'linux') {
+    run('tar', ['-czf', output, '-C', extracted, '.'])
+  } else if (target.platform === 'win32') {
     const zip = new AdmZip()
     zip.addLocalFolder(extracted)
     fs.writeFileSync(output, zip.toBuffer())
@@ -93,12 +104,14 @@ ${macOSNotice}`
 
 function parseArguments(argv, output) {
   const program = createProgram('package.js', 'Package RuyiSDK IDE for one target', output)
-    .addArgument(new Argument('<platform>', 'target platform').choices([...new Set(TARGETS.map((t) => t.platform))]))
-    .addArgument(new Argument('<arch>', 'target architecture').choices([...new Set(TARGETS.map((t) => t.arch))]))
+    .addArgument(new Argument('<platform>', 'target platform').choices([...new Set(TARGETS.map(t => t.platform))]))
+    .addArgument(new Argument('<arch>', 'target architecture').choices([...new Set(TARGETS.map(t => t.arch))]))
   program.parse(argv, { from: 'user' })
   const [platform, arch] = program.args
-  const target = TARGETS.find((entry) => entry.platform === platform && entry.arch === arch)
-  if (!target) program.error(`Unsupported target '${platform}-${arch}'`)
+  const target = TARGETS.find(entry => entry.platform === platform && entry.arch === arch)
+  if (!target) {
+    program.error(`Unsupported target '${platform}-${arch}'`)
+  }
   return { target }
 }
 
@@ -106,6 +119,8 @@ function main(argv) {
   return packageTarget(parseArguments(argv).target)
 }
 
-if (require.main === module) runCli(main)
+if (require.main === module) {
+  runCli(main)
+}
 
 module.exports = { packageTarget, parseArguments, main }

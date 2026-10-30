@@ -15,6 +15,8 @@ function main(argv) {
   return prepareExtensions()
 }
 
-if (require.main === module) runCli(main)
+if (require.main === module) {
+  runCli(main)
+}
 
 module.exports = { parseArguments, main }

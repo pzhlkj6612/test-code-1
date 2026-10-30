@@ -21,10 +21,14 @@ function parseArguments(argv, output) {
 function main(argv) {
   const { output, event, ref, defaultBranch, requestedVersion } = parseArguments(argv)
   validateResources()
-  if (event === 'workflow_dispatch' && requestedVersion) validateReleaseRequest(ref, requestedVersion, defaultBranch)
+  if (event === 'workflow_dispatch' && requestedVersion) {
+    validateReleaseRequest(ref, requestedVersion, defaultBranch)
+  }
   fs.appendFileSync(output, `matrix=${JSON.stringify({ include: TARGETS })}\n`)
 }
 
-if (require.main === module) runCli(main)
+if (require.main === module) {
+  runCli(main)
+}
 
 module.exports = { parseArguments, main }

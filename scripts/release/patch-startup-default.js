@@ -29,7 +29,7 @@ function patchStartupDefault(source) {
   if (matches.length !== 1) {
     throw new Error(`Expected one built-in startupEditor default, found ${matches.length}. Review the upstream bundle before packaging.`)
   }
-  return source.replace(setting, (match) => match.replace('default:"welcomePage"', 'default:"none"'))
+  return source.replace(setting, match => match.replace('default:"welcomePage"', 'default:"none"'))
 }
 
 function patchInstallation(appRoot) {
@@ -57,6 +57,8 @@ function main(argv) {
   patchInstallation(parseArguments(argv).appRoot)
 }
 
-if (require.main === module) runCli(main)
+if (require.main === module) {
+  runCli(main)
+}
 
 module.exports = { patchStartupDefault, patchInstallation, parseArguments, main }

@@ -69,6 +69,8 @@ function main(argv) {
   generateIcons()
 }
 
-if (require.main === module) runCli(main)
+if (require.main === module) {
+  runCli(main)
+}
 
 module.exports = { OUT_DIR, generateIcons, parseArguments, main }

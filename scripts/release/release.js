@@ -11,7 +11,9 @@ const { validateExtensions } = require('./package-extensions')
 const { createProgram, runCli } = require('./cli')
 
 function validateReleaseRequest(ref, version, defaultBranch) {
-  if (typeof defaultBranch !== 'string' || !defaultBranch) throw new Error('Default branch is required')
+  if (typeof defaultBranch !== 'string' || !defaultBranch) {
+    throw new Error('Default branch is required')
+  }
   if (ref !== `refs/heads/${defaultBranch}`) {
     throw new Error(`Manual releases must run on the default branch ${defaultBranch}`)
   }
@@ -24,9 +26,9 @@ function validateReleaseRequest(ref, version, defaultBranch) {
 function check(releaseState) {
   const version = config.releaseVersion
   validateVersion(version)
-  if (!releaseState || typeof releaseState !== 'object' ||
-      typeof releaseState.releaseExists !== 'boolean' ||
-      typeof releaseState.tagExists !== 'boolean') {
+  if (!releaseState || typeof releaseState !== 'object'
+    || typeof releaseState.releaseExists !== 'boolean'
+    || typeof releaseState.tagExists !== 'boolean') {
     throw new Error('Invalid release state')
   }
   if (releaseState.releaseExists) {
@@ -53,9 +55,13 @@ async function verifyArtifacts(directory) {
     const name = outputAsset(target, version)
     const file = path.join(directory, name)
     const stats = fs.statSync(file)
-    if (!stats.isFile() || stats.size === 0) throw new Error(`Empty or invalid package: ${name}`)
+    if (!stats.isFile() || stats.size === 0) {
+      throw new Error(`Empty or invalid package: ${name}`)
+    }
     const expectedHash = parseChecksum(fs.readFileSync(`${file}.sha256`, 'utf8'), name)
-    if (await sha256(file) !== expectedHash) throw new Error(`Release artifact checksum mismatch: ${name}`)
+    if (await sha256(file) !== expectedHash) {
+      throw new Error(`Release artifact checksum mismatch: ${name}`)
+    }
   }
   return expected
 }
@@ -89,15 +95,21 @@ function parseArguments(argv, output) {
     .description('Validate saved GitHub release state and append the release matrix to an output file')
     .argument('<release-state>', 'JSON file with releaseExists and tagExists booleans')
     .argument('<output-file>', 'GitHub Actions output file to append the matrix to')
-    .action((releaseState, outputFile) => { parsed = { command: 'check', releaseState, output: outputFile } })
+    .action((releaseState, outputFile) => {
+      parsed = { command: 'check', releaseState, output: outputFile }
+    })
   program.command('verify')
     .description('Verify that a directory contains exactly the expected packages and checksums')
     .argument('<artifact-directory>', 'directory containing release packages')
-    .action((directory) => { parsed = { command: 'verify', directory } })
+    .action((directory) => {
+      parsed = { command: 'verify', directory }
+    })
   program.command('notes')
     .description('Write release notes')
     .argument('<output-file>', 'file to write the release notes to')
-    .action((outputFile) => { parsed = { command: 'notes', output: outputFile } })
+    .action((outputFile) => {
+      parsed = { command: 'notes', output: outputFile }
+    })
   program.parse(argv, { from: 'user' })
   return parsed
 }
@@ -114,6 +126,8 @@ async function main(argv) {
   }
 }
 
-if (require.main === module) runCli(main)
+if (require.main === module) {
+  runCli(main)
+}
 
 module.exports = { validateReleaseRequest, check, verifyArtifacts, releaseNotes, parseArguments, main }

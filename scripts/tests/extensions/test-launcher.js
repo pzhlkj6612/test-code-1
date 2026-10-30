@@ -31,7 +31,9 @@ function load(extension, failure) {
         commands: {
           executeCommand: async (command) => {
             commands.push(command)
-            if (failure) throw failure
+            if (failure) {
+              throw failure
+            }
           },
         },
       }
@@ -90,7 +92,7 @@ function installation(root) {
   fs.mkdirSync(path.join(root, 'out/vs/workbench'), { recursive: true })
   fs.writeFileSync(path.join(root, 'out', workbench), source)
   fs.writeFileSync(path.join(root, 'out/other.js'), 'unchanged')
-  const hash = (content) => crypto.createHash('sha256').update(content).digest('base64').replace(/=+$/, '')
+  const hash = content => crypto.createHash('sha256').update(content).digest('base64').replace(/=+$/, '')
   const product = { nameShort: 'RuyiSDK IDE', checksums: { [workbench]: hash(source), 'other.js': hash('unchanged') } }
   fs.writeFileSync(path.join(root, 'product.json'), JSON.stringify(product))
   return { root, workbench, product, hash }

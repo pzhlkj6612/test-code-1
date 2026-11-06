@@ -9,7 +9,7 @@ const metadata = require('../../config/product-overrides.json')
 
 const ROOT = path.resolve(__dirname, '../..')
 const TARGETS = [
-  { platform: 'darwin', arch: 'arm64', runner: 'macos-14', format: 'dmg' },
+  { platform: 'darwin', arch: 'arm64', runner: 'macos-15', format: 'dmg' },
   { platform: 'win32', arch: 'x64', runner: 'windows-2022', format: 'zip' },
   { platform: 'win32', arch: 'arm64', runner: 'windows-2022', format: 'zip' },
   { platform: 'linux', arch: 'arm64', runner: 'ubuntu-22.04', format: 'tar.gz' },

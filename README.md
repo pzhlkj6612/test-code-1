@@ -13,6 +13,7 @@ RuyiSDK IDE is a lightweight downstream overlay of [VSCodium](https://github.com
 
 ## What’s changed
 
+- The About dialog displays the RuyiSDK IDE version alongside the upstream VSCodium version (`X.Y.Z (VSCodium N.NNN.NNNNN)`).
 - The default startup editor is set to “none,” so the Welcome page does not open automatically. Users can still open it or choose a different startup editor.
 - The bundled RuyiSDK dark theme is the default color theme for new profiles; users can choose RuyiSDK Light or another theme, or customize colors in settings.
 

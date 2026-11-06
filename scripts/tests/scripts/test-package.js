@@ -368,7 +368,7 @@ test('shared overlay patches integrity and bundles the home launcher for all pla
     for (const name of iconNames) {
       fs.writeFileSync(path.join(app, 'out/media', name), '<svg>upstream logo</svg>')
     }
-    const source = '"workbench.startupEditor":{type:"string",default:"welcomePage"}'
+    const source = '"workbench.startupEditor":{type:"string",default:"welcomePage"};let t=i.version;i.target?t=`${t} (${i.target} setup)`:i.darwinUniversalAssetId&&(t=`${t} (Universal)`)'
     const workbench = 'vs/workbench/workbench.desktop.main.js'
     fs.writeFileSync(path.join(app, 'out', workbench), source)
     const hash = crypto.createHash('sha256').update(source).digest('base64').replace(/=+$/, '')
@@ -380,7 +380,9 @@ test('shared overlay patches integrity and bundles the home launcher for all pla
     const product = JSON.parse(fs.readFileSync(path.join(app, 'product.json'), 'utf8'))
     assert.equal(product.nameShort, metadata.productName)
     assert.notEqual(product.checksums[workbench], hash)
-    assert.match(fs.readFileSync(path.join(app, 'out', workbench), 'utf8'), /default:"none"/)
+    const patchedWorkbench = fs.readFileSync(path.join(app, 'out', workbench), 'utf8')
+    assert.match(patchedWorkbench, /default:"none"/)
+    assert.ok(patchedWorkbench.includes(`\`${config.releaseVersion} (VSCodium \${i.version})\``))
     assert.equal(JSON.parse(fs.readFileSync(path.join(app, 'package.json'), 'utf8')).name, 'RuyiSDK IDE')
     assert.ok(fs.existsSync(path.join(app, 'extensions/ruyisdk-ide.home-launcher/extension.js')))
     const themeRoot = path.join(app, 'extensions/ruyisdk-ide.ruyisdk-theme')

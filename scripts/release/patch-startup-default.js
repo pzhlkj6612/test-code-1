@@ -5,6 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const crypto = require('node:crypto')
 const { createProgram, runCli } = require('./cli')
+const { config, validateVersion } = require('./package-utils')
 
 const WORKBENCH = 'vs/workbench/workbench.desktop.main.js'
 
@@ -32,13 +33,24 @@ function patchStartupDefault(source) {
   return source.replace(setting, match => match.replace('default:"welcomePage"', 'default:"none"'))
 }
 
+function patchAboutVersion(source, version = config.releaseVersion) {
+  validateVersion(version)
+  const aboutVersion = /let ([A-Za-z_$][\w$]*)=([A-Za-z_$][\w$]*)\.version;(?=\2\.target\?\1=`\$\{\1\} \(\$\{\2\.target\} setup\)`:\2\.darwinUniversalAssetId)/g
+  const matches = [...source.matchAll(aboutVersion)]
+  if (matches.length !== 1) {
+    throw new Error(`Expected one About dialog version definition, found ${matches.length}. Review the upstream bundle before packaging.`)
+  }
+  return source.replace(aboutVersion, (_, variable, product) => `let ${variable}=\`${version} (VSCodium \${${product}.version})\`;`)
+}
+
 function patchInstallation(appRoot) {
   const productFile = path.join(appRoot, 'product.json')
   const product = JSON.parse(fs.readFileSync(productFile, 'utf8'))
   verifyChecksums(appRoot, product)
 
   const bundle = path.join(appRoot, 'out', WORKBENCH)
-  fs.writeFileSync(bundle, patchStartupDefault(fs.readFileSync(bundle, 'utf8')))
+  const source = fs.readFileSync(bundle, 'utf8')
+  fs.writeFileSync(bundle, patchAboutVersion(patchStartupDefault(source)))
   product.checksums[WORKBENCH] = checksum(bundle)
 
   verifyChecksums(appRoot, product)
@@ -47,7 +59,7 @@ function patchInstallation(appRoot) {
 
 function parseArguments(argv, output) {
   const program = createProgram('patch-startup-default.js',
-    'Set the built-in workbench.startupEditor default to none and refresh its integrity checksum', output)
+    'Patch built-in workbench defaults and About dialog version, then refresh the integrity checksum', output)
     .argument('<app-root>', 'resources/app directory of an extracted editor')
   program.parse(argv, { from: 'user' })
   return { appRoot: program.args[0] }
@@ -61,4 +73,4 @@ if (require.main === module) {
   runCli(main)
 }
 
-module.exports = { patchStartupDefault, patchInstallation, parseArguments, main }
+module.exports = { patchStartupDefault, patchAboutVersion, patchInstallation, parseArguments, main }

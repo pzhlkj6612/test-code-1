@@ -8,7 +8,8 @@ const test = require('node:test')
 const vm = require('node:vm')
 const os = require('node:os')
 const crypto = require('node:crypto')
-const { patchStartupDefault, patchInstallation } = require('../../release/patch-startup-default')
+const { patchStartupDefault, patchAboutVersion, patchInstallation } = require('../../release/patch-startup-default')
+const config = require('../../../config/release.json')
 
 const launcher = path.resolve(__dirname, '../../../extensions/launcher')
 
@@ -86,9 +87,19 @@ test('patch refuses missing, duplicate or changed upstream defaults', () => {
   }
 })
 
+test('about version patch formats downstream and upstream versions and rejects unexpected bundles', () => {
+  const source = 'function Omo(i,e){let t=i.version;i.target?t=`${t} (${i.target} setup)`:i.darwinUniversalAssetId&&(t=`${t} (Universal)`)}'
+  const patched = patchAboutVersion(source, '0.1.8')
+  assert.equal(patched, 'function Omo(i,e){let t=`0.1.8 (VSCodium ${i.version})`;i.target?t=`${t} (${i.target} setup)`:i.darwinUniversalAssetId&&(t=`${t} (Universal)`)}')
+  for (const value of ['', source + source, patched]) {
+    assert.throws(() => patchAboutVersion(value, '0.1.8'), /Expected one About dialog version definition/)
+  }
+  assert.throws(() => patchAboutVersion(source, 'v0.1.8'), /Invalid release version/)
+})
+
 function installation(root) {
   const workbench = 'vs/workbench/workbench.desktop.main.js'
-  const source = '"workbench.startupEditor":{type:"string",default:"welcomePage"}'
+  const source = '"workbench.startupEditor":{type:"string",default:"welcomePage"};let t=i.version;i.target?t=`${t} (${i.target} setup)`:i.darwinUniversalAssetId&&(t=`${t} (Universal)`)'
   fs.mkdirSync(path.join(root, 'out/vs/workbench'), { recursive: true })
   fs.writeFileSync(path.join(root, 'out', workbench), source)
   fs.writeFileSync(path.join(root, 'out/other.js'), 'unchanged')
@@ -103,7 +114,9 @@ test('intentional patch updates only its checksum and preserves integrity checki
   const { root, workbench, product, hash } = installation(directory.path)
   patchInstallation(root)
   const updated = JSON.parse(fs.readFileSync(path.join(root, 'product.json'), 'utf8'))
-  assert.equal(updated.checksums[workbench], hash(fs.readFileSync(path.join(root, 'out', workbench))))
+  const patched = fs.readFileSync(path.join(root, 'out', workbench), 'utf8')
+  assert.ok(patched.includes(`\`${config.releaseVersion} (VSCodium \${i.version})\``))
+  assert.equal(updated.checksums[workbench], hash(Buffer.from(patched)))
   assert.notEqual(updated.checksums[workbench], product.checksums[workbench])
   assert.equal(updated.checksums['other.js'], product.checksums['other.js'])
   assert.equal(updated.nameShort, product.nameShort)

@@ -8,7 +8,7 @@ RuyiSDK IDE is a lightweight downstream overlay of [VSCodium](https://github.com
 - The RuyiSDK extension logo replaces the workbench logos; its monochrome version is used for the empty-window watermark in light, dark, and both high-contrast themes.
 - Bundled RuyiSDK light and dark color themes, with neutral editor surfaces, navy selection accents, and warm gold highlights.
 - The bundled [RuyiSDK VS Code extension](https://github.com/ruyisdk/ruyisdk-vscode-extension).
-- The bundled [CanMV extension](https://github.com/kendryte/canmv-vscode-extension), built from pinned source with native backends for every IDE target.
+- The bundled [CanMV extension](https://github.com/kendryte/canmv-vscode-extension), built from pinned source with native backends for every IDE target. A local patch ([patches/kendryte747.canmv-vscode](patches/kendryte747.canmv-vscode)) makes it depend on the bundled open-source [Pyright](https://github.com/microsoft/pyright) extension instead of Pylance, which is unavailable outside Microsoft products. Patched builds are excluded from extension auto-updates.
 - A home launcher that opens RuyiSDK Home on startup when RuyiSDK is enabled.
 
 ## What’s changed
@@ -36,7 +36,7 @@ The [CI workflow](.github/workflows/ci.yml) uploads packages and their SHA-256 c
 
 Releases are manual; pushes and pull requests never publish.
 
-1. Update `releaseVersion` and pinned resources in [config/release.json](config/release.json), then merge into the default branch.
+1. Update `releaseVersion` and pinned resources in [config/release.json](config/release.json), then merge into the default branch. After bumping a patched source, confirm its patches still apply (`prepare-extensions.js` fails otherwise).
 2. In GitHub Actions, select **CI**, choose **Run workflow** on the default branch, and enter the exact configured version without a `v` prefix.
 
 Manual runs reject other branches, mismatched versions, and existing release versions or tags.
@@ -47,3 +47,7 @@ Manual runs reject other branches, mismatched versions, and existing release ver
 - `node scripts/release/generate-icons.js` generates app icons from [icons/source/icon.png](icons/source/icon.png) into the untracked `icons/generated/` directory (`package.js` and the tests do this automatically).
 - Every script under `scripts/release/` prints its usage with `--help`.
 - No script reads environment variables. Always use arguments.
+
+### Patching bundled extensions
+
+Source-built extensions are patched Debian-style: `patches/<extension id>/series` lists `NNNN-name.patch` files in apply order, and each patch starts with a [DEP-3](https://dep-team.pages.debian.net/deps/dep3/) header. `prepare-extensions.js` applies them with `git apply` to a copy of the pinned source, marks the build dirty, and excludes it from extension auto-updates.

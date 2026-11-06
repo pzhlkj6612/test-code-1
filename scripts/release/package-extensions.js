@@ -36,8 +36,52 @@ function validateExtensions(extensions = config.extensions) {
     if (extension.source === 'prebuilt' && resource.type !== 'file') {
       throw new Error(`Invalid prebuilt resource for ${extension.id}`)
     }
+    if (extensionPatches(extension).length > 0 && extension.source !== 'build') {
+      throw new Error(`Only source-built extensions can be patched: ${extension.id}`)
+    }
   }
   return extensions
+}
+
+// Quilt-style series: patches/<extension id>/series lists NNNN-name.patch files in apply order.
+function patchSeries(directory) {
+  const series = path.join(directory, 'series')
+  if (!fs.existsSync(series)) {
+    if (fs.existsSync(directory)) {
+      throw new Error(`Missing patch series: ${series}`)
+    }
+    return []
+  }
+  const names = fs.readFileSync(series, 'utf8').split(/\r?\n/)
+    .map(line => line.trim()).filter(line => line !== '' && !line.startsWith('#'))
+  if (names.length === 0) {
+    throw new Error(`Empty patch series: ${series}`)
+  }
+  const unique = new Set(names)
+  for (const name of names) {
+    if (!/^\d{4}-[\w.-]+\.patch$/.test(name)) {
+      throw new Error(`Invalid patch name in ${series}: ${name}`)
+    }
+    if (!fs.statSync(path.join(directory, name), { throwIfNoEntry: false })?.isFile()) {
+      throw new Error(`Missing patch file: ${path.join(directory, name)}`)
+    }
+  }
+  if (unique.size !== names.length) {
+    throw new Error(`Duplicate patch in ${series}`)
+  }
+  const unlisted = fs.readdirSync(directory).filter(name => name !== 'series' && !unique.has(name))
+  if (unlisted.length > 0) {
+    throw new Error(`Patch files not listed in ${series}: ${unlisted.join(', ')}`)
+  }
+  return names.map(name => path.join(directory, name))
+}
+
+function extensionPatches(extension) {
+  return patchSeries(path.join(ROOT, 'patches', extension.id))
+}
+
+function isPatched(extension) {
+  return extensionPatches(extension).length > 0
 }
 
 function extensionAsset(extension) {
@@ -77,7 +121,8 @@ function buildCanmvExtension(extension, source, output) {
   }
 
   writeJson(path.join(extensionRoot, 'build-info.json'), {
-    version: extension.version, commit: resource.commit, shortCommit: resource.commit.slice(0, 7), dirty: false,
+    version: extension.version, commit: resource.commit, shortCommit: resource.commit.slice(0, 7),
+    dirty: isPatched(extension),
   })
   run(process.execPath, [require.resolve('@vscode/vsce/vsce'), 'package', '--no-dependencies', '-o', output], {
     cwd: extensionRoot,
@@ -111,7 +156,16 @@ function prepareExtensions() {
       if (!fs.existsSync(source)) {
         throw new Error(`Missing workflow-cloned source repository: ${source}`)
       }
-      buildCanmvExtension(extension, source, path.join(directory.path, name))
+      // Build from a copy so patches and build outputs never touch the pinned checkout.
+      const copy = path.join(directory.path, 'source')
+      fs.cpSync(source, copy, { recursive: true, filter: file => path.basename(file) !== '.git' })
+      for (const patch of extensionPatches(extension)) {
+        // Without the ceiling, git finds the enclosing repository and silently skips every hunk.
+        run('git', ['apply', '--verbose', patch], {
+          cwd: copy, env: { ...process.env, GIT_CEILING_DIRECTORIES: directory.path },
+        })
+      }
+      buildCanmvExtension(extension, copy, path.join(directory.path, name))
       fs.renameSync(path.join(directory.path, name), output)
     }
   }
@@ -148,4 +202,6 @@ function installExtensions(appRoot, build, target, cache = path.join(ROOT, '.cac
   }
 }
 
-module.exports = { validateExtensions, extensionAsset, verifyExtension, prepareExtensions, installExtensions }
+module.exports = {
+  validateExtensions, patchSeries, isPatched, extensionAsset, verifyExtension, prepareExtensions, installExtensions,
+}

@@ -10,7 +10,7 @@ const {
   outputAsset, run, macExecutable, verifyArchitecture,
 } = require('./package-utils')
 const { sha256 } = require('./utils')
-const { installExtensions } = require('./package-extensions')
+const { installExtensions, isPatched } = require('./package-extensions')
 const { overlay, rebrand } = require('./package-branding')
 const { generateIcons } = require('./generate-icons')
 const { createProgram, runCli } = require('./cli')
@@ -59,7 +59,7 @@ async function packageTarget(target) {
 
   const bundledExtensions = config.extensions.map((extension) => {
     const resource = extension.source === 'build' ? resourceById(extension.resource) : undefined
-    const sourceSuffix = resource ? ` (source ${resource.commit})` : ''
+    const sourceSuffix = resource ? ` (source ${resource.commit}${isPatched(extension) ? ', locally patched' : ''})` : ''
     return `${extension.id}: ${extension.version}${sourceSuffix}`
   }).join('\n')
   const macOSNotice = target.platform === 'darwin'

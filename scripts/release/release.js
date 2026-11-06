@@ -7,7 +7,7 @@ const { isDeepStrictEqual } = require('node:util')
 const config = require('../../config/release.json')
 const { TARGETS, validateVersion, outputAsset, parseChecksum, resourceById } = require('./package-utils')
 const { sha256 } = require('./utils')
-const { validateExtensions } = require('./package-extensions')
+const { validateExtensions, isPatched } = require('./package-extensions')
 const { createProgram, runCli } = require('./cli')
 
 function validateReleaseRequest(ref, version, defaultBranch) {
@@ -72,7 +72,8 @@ function releaseNotes() {
   const extensions = validateExtensions()
   const extensionsList = extensions.map((extension) => {
     const resource = extension.source === 'build' ? resourceById(extension.resource) : undefined
-    return `- ${extension.id} ${extension.version}${resource ? ` (built from ${resource.commit})` : ''}`
+    const patched = isPatched(extension) ? ' with local patches' : ''
+    return `- ${extension.id} ${extension.version}${resource ? ` (built from ${resource.commit}${patched})` : ''}`
   }).join('\n')
 
   return `RuyiSDK IDE ${version}, based on upstream editor ${config.baseVersion}.

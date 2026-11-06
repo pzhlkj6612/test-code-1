@@ -7,7 +7,7 @@ const path = require('node:path')
 const { spawnSync } = require('node:child_process')
 const { patchInstallation } = require('./patch-startup-default')
 const { ROOT, metadata, run, writeJson } = require('./package-utils')
-const { validateExtensions } = require('./package-extensions')
+const { validateExtensions, isPatched } = require('./package-extensions')
 
 function patchProduct(product, identity = metadata) {
   if (!Array.isArray(product.builtInExtensionsEnabledWithAutoUpdates)) {
@@ -29,7 +29,9 @@ function patchProduct(product, identity = metadata) {
     product[key] = identity[key]
   }
   product.builtInExtensionsEnabledWithAutoUpdates = [...new Set([
-    ...product.builtInExtensionsEnabledWithAutoUpdates, ...validateExtensions().map(extension => extension.id),
+    ...product.builtInExtensionsEnabledWithAutoUpdates,
+    // Patched builds stay pinned; a gallery update would silently drop the local patches.
+    ...validateExtensions().filter(extension => !isPatched(extension)).map(extension => extension.id),
   ])]
   // Otherwisw, the upstream updater would install VSCodium over this downstream overlay.
   delete product.updateUrl

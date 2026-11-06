@@ -19,7 +19,7 @@ const {
 } = require('../../release/package-utils')
 const { sha256 } = require('../../release/utils')
 const {
-  validateExtensions, extensionAsset, verifyExtension, installExtensions,
+  validateExtensions, patchSeries, isPatched, extensionAsset, verifyExtension, installExtensions,
 } = require('../../release/package-extensions')
 const { patchProduct, replaceLauncher, overlay, rebrand } = require('../../release/package-branding')
 const { OUT_DIR: ICONS_DIR, generateIcons } = require('../../release/generate-icons')
@@ -49,19 +49,22 @@ function nativeHeader(target) {
 
 test('pinned resources and extension resource references are provider-neutral', () => {
   assert.deepEqual(validateExtensions().map(extension => extension.id), [
-    'kendryte747.canmv-vscode', 'RuyiSDK.ruyisdk-vscode-extension',
+    'kendryte747.canmv-vscode', 'RuyiSDK.ruyisdk-vscode-extension', 'ms-pyright.pyright',
   ])
-  assert.equal(validateResources().length, 8)
+  assert.equal(validateResources().length, 9)
   const [source, prebuilt] = config.extensions
   assert.equal(resourceById(source.resource).type, 'git')
   assert.match(extensionAsset(source), new RegExp(resourceById(source.resource).commit))
   assert.equal(resourceById(prebuilt.resource).type, 'file')
   assert.equal(extensionAsset(prebuilt), path.basename(resourceById(prebuilt.resource).path))
+  assert.equal(isPatched(source), true)
+  assert.equal(isPatched(prebuilt), false)
   for (const entries of [
     null, [], [{ ...source, id: '../extension' }],
     [{ ...source, version: '../1.0.0' }], [{ ...source, resource: 'missing' }],
     [{ ...source, source: 'unknown' }], [{ ...prebuilt, resource: source.resource }],
     [source, { ...source, id: source.id.toUpperCase() }],
+    [{ ...prebuilt, id: source.id, version: source.version }],
   ]) {
     assert.throws(() => validateExtensions(entries), /extension|version|source|commit|checksum/i)
   }
@@ -116,6 +119,29 @@ test('resource preparer clones and checks out the configured commit', () => {
   clone({ id: 'test-repository', type: 'git', url: remote, commit, path: path.relative(root, local) })
   assert.equal(git(['rev-parse', 'HEAD'], { cwd: local }), commit)
   assert.equal(fs.readFileSync(path.join(local, 'input.txt'), 'utf8'), 'pinned input')
+})
+
+test('patch series follow the quilt layout and list every patch in order', () => {
+  using rootDirectory = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'ruyi-patch-series-'))
+  const directory = rootDirectory.path
+  assert.deepEqual(patchSeries(path.join(directory, 'absent')), [])
+  const write = (name, content = '') => fs.writeFileSync(path.join(directory, name), content)
+  assert.throws(() => patchSeries(directory), /Missing patch series/)
+  write('series', '# comment\n\n')
+  assert.throws(() => patchSeries(directory), /Empty patch series/)
+  write('0002-second.patch')
+  write('0001-first.patch')
+  write('series', '0002-second.patch\n0001-first.patch\n')
+  assert.deepEqual(patchSeries(directory),
+    [path.join(directory, '0002-second.patch'), path.join(directory, '0001-first.patch')])
+  for (const [series, error] of [
+    ['0001-first.patch\n', /not listed/], ['0001-first.patch\n0001-first.patch\n0002-second.patch\n', /Duplicate/],
+    ['0003-missing.patch\n', /Missing patch file/], ['first.patch\n', /Invalid patch name/],
+    ['../0001-outside.patch\n', /Invalid patch name/], ['0001-first.patch -p0\n', /Invalid patch name/],
+  ]) {
+    write('series', series)
+    assert.throws(() => patchSeries(directory), error)
+  }
 })
 
 test('extension identity and version checks apply to both input types', () => {
@@ -252,7 +278,7 @@ test('product identity is isolated without losing licenses, remote downloads or 
   assert.equal(result.serverDownloadUrlTemplate, 'https://upstream.invalid/server')
   assert.deepEqual(result.checksums, { file: 'hash' })
   assert.deepEqual(result.builtInExtensionsEnabledWithAutoUpdates,
-    ['existing', 'RuyiSDK.ruyisdk-vscode-extension', 'kendryte747.canmv-vscode'])
+    ['existing', 'RuyiSDK.ruyisdk-vscode-extension', 'ms-pyright.pyright'])
   assert.throws(() => patchProduct({}), /Expected builtInExtensions/)
 })
 
@@ -469,4 +495,5 @@ test('release notes describe configured extensions without network access', () =
       assert.ok(notes.includes(resourceById(extension.resource).commit))
     }
   }
+  assert.ok(notes.includes('with local patches'))
 })

@@ -5,9 +5,10 @@ const fs = require('node:fs')
 const path = require('node:path')
 const AdmZip = require('adm-zip')
 const {
-  validateVersion, TARGETS, ROOT, config, run, writeJson, verifyArchitecture,
+  validateVersion, TARGETS, ROOT, config, writeJson, verifyArchitecture,
   resourceById, resourcePath,
 } = require('./package-utils')
+const { run } = require('./utils')
 
 function validateExtensions(extensions = config.extensions) {
   if (!Array.isArray(extensions) || extensions.length === 0) {

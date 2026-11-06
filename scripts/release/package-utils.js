@@ -3,7 +3,6 @@
 
 const fs = require('node:fs')
 const path = require('node:path')
-const { spawnSync } = require('node:child_process')
 const simplePlist = require('simple-plist')
 const config = require('../../config/release.json')
 const metadata = require('../../config/product-overrides.json')
@@ -108,16 +107,6 @@ function outputAsset(target, version) {
   return `${metadata.applicationName}-${target.platform}-${target.arch}-${version}${suffix}.${target.format}`
 }
 
-function run(command, args, options = {}) {
-  const result = spawnSync(command, args, { stdio: 'inherit', ...options })
-  if (result.error) {
-    throw result.error
-  }
-  if (result.status !== 0) {
-    throw new Error(`${command} failed (${result.status})`)
-  }
-}
-
 function parseChecksum(text, asset) {
   const lines = text.trim().split(/\r?\n/)
   if (lines.length !== 1) {
@@ -183,5 +172,5 @@ function verifyArchitecture(file, target) {
 module.exports = {
   ROOT, TARGETS, config, metadata, targetFor, validateVersion, resourceForTarget, resourceById,
   resourcePath, validateResources, outputAsset,
-  run, parseChecksum, writeJson, macExecutable, verifyArchitecture,
+  parseChecksum, writeJson, macExecutable, verifyArchitecture,
 }

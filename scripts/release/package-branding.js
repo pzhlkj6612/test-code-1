@@ -4,9 +4,9 @@
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
-const { spawnSync } = require('node:child_process')
 const { patchInstallation } = require('./patch-startup-default')
-const { ROOT, metadata, run, writeJson } = require('./package-utils')
+const { ROOT, metadata, writeJson } = require('./package-utils')
+const { run } = require('./utils')
 const { validateExtensions, isPatched } = require('./package-extensions')
 
 function patchProduct(product, identity = metadata) {
@@ -152,14 +152,10 @@ Icon=%k/resources/app/resources/linux/code.png
       }
     }
 
-    const result = spawnSync('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleIconFile', plist], { encoding: 'utf8' })
-    if (result.error) {
-      throw result.error
-    }
-    if (result.status !== 0) {
-      throw new Error('Cannot read CFBundleIconFile')
-    }
-    const icon = result.stdout.trim()
+    const icon = run('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleIconFile', plist], {
+      encoding: 'utf8',
+      stdio: 'pipe',
+    }).stdout.trim()
     if (!/^[\w.-]+$/.test(icon)) {
       throw new Error(`Unexpected bundle icon name: ${icon}`)
     }

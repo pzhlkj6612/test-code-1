@@ -3,11 +3,10 @@
 
 const fs = require('node:fs')
 const path = require('node:path')
-const { execFileSync } = require('node:child_process')
 const { Readable } = require('node:stream')
 const { pipeline } = require('node:stream/promises')
 const { config, resourcePath, validateResources } = require('./package-utils')
-const { sha256 } = require('./utils')
+const { run, sha256 } = require('./utils')
 const { createProgram, runCli } = require('./cli')
 
 async function download(resource) {
@@ -37,9 +36,10 @@ async function download(resource) {
 function clone(resource) {
   const destination = resourcePath(resource)
   if (fs.existsSync(destination)) {
-    const commit = execFileSync('git', ['-C', destination, 'rev-parse', 'HEAD'], {
+    const commit = run('git', ['-C', destination, 'rev-parse', 'HEAD'], {
       encoding: 'utf8',
-    }).trim()
+      stdio: 'pipe',
+    }).stdout.trim()
     if (commit !== resource.commit) {
       throw new Error(`Prepared repository ${resource.id} is at ${commit}, expected ${resource.commit}`)
     }
@@ -50,18 +50,13 @@ function clone(resource) {
   using temporary = fs.mkdtempDisposableSync(path.join(path.dirname(destination), `.${path.basename(destination)}-`))
   const checkout = path.join(temporary.path, 'checkout')
 
-  execFileSync('git', ['clone', '--filter=blob:none', '--no-checkout', resource.url, checkout], {
-    stdio: 'inherit',
-  })
-  execFileSync('git', ['-C', checkout, 'fetch', '--depth=1', 'origin', resource.commit], {
-    stdio: 'inherit',
-  })
-  execFileSync('git', ['-C', checkout, 'checkout', '--detach', resource.commit], {
-    stdio: 'inherit',
-  })
-  const commit = execFileSync('git', ['-C', checkout, 'rev-parse', 'HEAD'], {
+  run('git', ['clone', '--filter=blob:none', '--no-checkout', resource.url, checkout])
+  run('git', ['-C', checkout, 'fetch', '--depth=1', 'origin', resource.commit])
+  run('git', ['-C', checkout, 'checkout', '--detach', resource.commit])
+  const commit = run('git', ['-C', checkout, 'rev-parse', 'HEAD'], {
     encoding: 'utf8',
-  }).trim()
+    stdio: 'pipe',
+  }).stdout.trim()
   if (commit !== resource.commit) {
     throw new Error(`Expected ${resource.commit}, checked out ${commit}`)
   }

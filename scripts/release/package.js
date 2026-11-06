@@ -7,9 +7,9 @@ const AdmZip = require('adm-zip')
 const { Argument } = require('commander')
 const {
   ROOT, TARGETS, config, metadata, validateVersion, resourceForTarget, resourceById, resourcePath,
-  outputAsset, run, macExecutable, verifyArchitecture,
+  outputAsset, macExecutable, verifyArchitecture,
 } = require('./package-utils')
-const { sha256 } = require('./utils')
+const { run, sha256 } = require('./utils')
 const { installExtensions, isPatched } = require('./package-extensions')
 const { overlay, rebrand } = require('./package-branding')
 const { generateIcons } = require('./generate-icons')

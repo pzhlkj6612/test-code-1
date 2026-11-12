@@ -101,10 +101,16 @@ function validateResources(resources = config.resources) {
   return resources
 }
 
+function archiveRoot(target, version) {
+  validateVersion(version)
+  return `${metadata.applicationName}-${target.platform}-${target.arch}-${version}`
+}
+
 function outputAsset(target, version) {
   validateVersion(version)
+  const base = archiveRoot(target, version);
   const suffix = target.platform === 'darwin' ? '-unsigned' : ''
-  return `${metadata.applicationName}-${target.platform}-${target.arch}-${version}${suffix}.${target.format}`
+  return `${base}${suffix}.${target.format}`
 }
 
 function parseChecksum(text, asset) {
@@ -171,6 +177,6 @@ function verifyArchitecture(file, target) {
 
 module.exports = {
   ROOT, TARGETS, config, metadata, targetFor, validateVersion, resourceForTarget, resourceById,
-  resourcePath, validateResources, outputAsset,
+  resourcePath, validateResources, archiveRoot, outputAsset,
   parseChecksum, writeJson, macExecutable, verifyArchitecture,
 }

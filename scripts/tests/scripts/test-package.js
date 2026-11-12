@@ -14,9 +14,10 @@ const AdmZip = require('adm-zip')
 const simplePlist = require('simple-plist')
 const {
   TARGETS, targetFor, validateVersion, resourceForTarget, resourceById, resourcePath,
-  validateResources, outputAsset,
+  validateResources, archiveRoot, outputAsset,
   parseChecksum, macExecutable, verifyArchitecture,
 } = require('../../release/package-utils')
+const { createArchive } = require('../../release/package')
 const { sha256 } = require('../../release/utils')
 const {
   validateExtensions, patchSeries, isPatched, extensionAsset, verifyExtension, installExtensions,
@@ -232,6 +233,7 @@ test('release matrix maps all six targets to configured file resources', () => {
     assert.equal(path.basename(input.path).endsWith('.tar.gz'), target.platform === 'linux')
     assert.match(input.sha256, /^[a-f0-9]{64}$/)
     assert.equal(resourcePath(input), path.resolve(path.join(__dirname, '../../..'), input.path))
+    assert.equal(archiveRoot(target, '1.2.3-ruyi.1'), `ruyisdk-ide-${target.platform}-${target.arch}-1.2.3-ruyi.1`)
     assert.ok(outputAsset(target, '1.2.3-ruyi.1').includes('1.2.3-ruyi.1'))
   }
   assert.equal(outputAsset(TARGETS[0], '1.2.3'), 'ruyisdk-ide-darwin-arm64-1.2.3-unsigned.dmg')
@@ -434,6 +436,44 @@ test('Windows rebrand renames both CLI wrappers and the executable', () => {
   assert.ok(fs.existsSync(path.join(app, 'ruyisdk-ide.exe')))
   for (const suffix of ['', '.cmd']) {
     assert.equal(fs.readFileSync(path.join(app, `bin/ruyisdk-ide${suffix}`), 'utf8'), '"../ruyisdk-ide.exe"')
+  }
+})
+
+test('Linux and Windows archives wrap files inside a versioned top-level directory', () => {
+  using workDirectory = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'ruyi-archive-layout-'))
+  const work = workDirectory.path
+  const version = '1.2.3'
+
+  const winTarget = targetFor('win32', 'x64')
+  const winRoot = archiveRoot(winTarget, version)
+  const winExtracted = path.join(work, winRoot)
+  fs.mkdirSync(path.join(winExtracted, 'bin'), { recursive: true })
+  fs.writeFileSync(path.join(winExtracted, 'ruyisdk-ide.exe'), 'exe')
+  fs.writeFileSync(path.join(winExtracted, 'bin/ruyisdk-ide.cmd'), 'cmd')
+  const zipFile = path.join(work, outputAsset(winTarget, version))
+  createArchive(winExtracted, zipFile, winTarget, version)
+  const zipUnpacked = path.join(work, 'unpacked-win32')
+  new AdmZip(zipFile).extractAllTo(zipUnpacked, true)
+  assert.deepEqual(fs.readdirSync(zipUnpacked), [winRoot])
+  assert.equal(fs.readFileSync(path.join(zipUnpacked, winRoot, 'ruyisdk-ide.exe'), 'utf8'), 'exe')
+  assert.equal(fs.readFileSync(path.join(zipUnpacked, winRoot, 'bin/ruyisdk-ide.cmd'), 'utf8'), 'cmd')
+
+  if (process.platform !== 'win32') {
+    const linuxTarget = targetFor('linux', 'x64')
+    const linuxRoot = archiveRoot(linuxTarget, version)
+    const linuxExtracted = path.join(work, linuxRoot)
+    fs.mkdirSync(path.join(linuxExtracted, 'bin'), { recursive: true })
+    fs.writeFileSync(path.join(linuxExtracted, 'ruyisdk-ide'), 'elf')
+    fs.writeFileSync(path.join(linuxExtracted, 'bin/ruyisdk-ide'), 'sh')
+    const tarFile = path.join(work, outputAsset(linuxTarget, version))
+    createArchive(linuxExtracted, tarFile, linuxTarget, version)
+    const tarUnpacked = path.join(work, 'unpacked-linux')
+    fs.mkdirSync(tarUnpacked)
+    const untar = spawnSync('tar', ['-xzf', tarFile, '-C', tarUnpacked], { encoding: 'utf8' })
+    assert.equal(untar.status, 0, untar.stderr)
+    assert.deepEqual(fs.readdirSync(tarUnpacked), [linuxRoot])
+    assert.equal(fs.readFileSync(path.join(tarUnpacked, linuxRoot, 'ruyisdk-ide'), 'utf8'), 'elf')
+    assert.equal(fs.readFileSync(path.join(tarUnpacked, linuxRoot, 'bin/ruyisdk-ide'), 'utf8'), 'sh')
   }
 })
 

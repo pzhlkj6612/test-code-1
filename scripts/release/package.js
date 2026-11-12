@@ -7,13 +7,29 @@ const AdmZip = require('adm-zip')
 const { Argument } = require('commander')
 const {
   ROOT, TARGETS, config, metadata, validateVersion, resourceForTarget, resourceById, resourcePath,
-  outputAsset, macExecutable, verifyArchitecture,
+  archiveRoot, outputAsset, macExecutable, verifyArchitecture,
 } = require('./package-utils')
 const { run, sha256 } = require('./utils')
 const { installExtensions, isPatched } = require('./package-extensions')
 const { overlay, rebrand } = require('./package-branding')
 const { generateIcons } = require('./generate-icons')
 const { createProgram, runCli } = require('./cli')
+
+function createArchive(extracted, output, target, version = config.releaseVersion) {
+  const root = archiveRoot(target, version)
+  if (target.platform === 'linux') {
+    run('tar', ['-czf', output, '-C', path.dirname(extracted), root])
+  } else if (target.platform === 'win32') {
+    const zip = new AdmZip()
+    zip.addLocalFolder(extracted, root)
+    fs.writeFileSync(output, zip.toBuffer())
+  } else {
+    fs.renameSync(path.join(extracted, 'VSCodium.app'), path.join(extracted, `${metadata.productName}.app`))
+    fs.symlinkSync('/Applications', path.join(extracted, 'Applications'))
+    run('hdiutil', ['create', '-volname', metadata.productName, '-srcfolder', extracted, '-ov', '-format', 'UDZO', output])
+    run('hdiutil', ['verify', output])
+  }
+}
 
 async function packageTarget(target) {
   const version = config.releaseVersion
@@ -34,7 +50,7 @@ async function packageTarget(target) {
   fs.mkdirSync(path.join(ROOT, 'build'), { recursive: true })
   using build = fs.mkdtempDisposableSync(path.join(ROOT, 'build', `${target.platform}-${target.arch}-`))
 
-  const extracted = path.join(build.path, 'app')
+  const extracted = path.join(build.path, archiveRoot(target, version))
   fs.mkdirSync(extracted, { recursive: true })
   if (target.platform === 'linux') {
     run('tar', ['-xzf', archive, '-C', extracted])
@@ -82,18 +98,7 @@ ${macOSNotice}`
   // Stage in a temp hidden directory so a failed run never leaves stuff.
   using staging = fs.mkdtempDisposableSync(path.join(dist, `.${name}-`))
   const output = path.join(staging.path, name)
-  if (target.platform === 'linux') {
-    run('tar', ['-czf', output, '-C', extracted, '.'])
-  } else if (target.platform === 'win32') {
-    const zip = new AdmZip()
-    zip.addLocalFolder(extracted)
-    fs.writeFileSync(output, zip.toBuffer())
-  } else {
-    fs.renameSync(appDir, path.join(extracted, `${metadata.productName}.app`))
-    fs.symlinkSync('/Applications', path.join(extracted, 'Applications'))
-    run('hdiutil', ['create', '-volname', metadata.productName, '-srcfolder', extracted, '-ov', '-format', 'UDZO', output])
-    run('hdiutil', ['verify', output])
-  }
+  createArchive(extracted, output, target, version)
 
   fs.writeFileSync(`${output}.sha256`, `${await sha256(output)}  ${name}\n`)
   const published = path.join(dist, name)
@@ -123,4 +128,4 @@ if (require.main === module) {
   runCli(main)
 }
 
-module.exports = { packageTarget, parseArguments, main }
+module.exports = { createArchive, packageTarget, parseArguments, main }

@@ -101,6 +101,39 @@ function validateResources(resources = config.resources) {
   return resources
 }
 
+function validateRuyi(ruyi = config.ruyi) {
+  if (!ruyi || typeof ruyi !== 'object' || Array.isArray(ruyi)) {
+    throw new Error('Invalid ruyi configuration')
+  }
+  validateVersion(ruyi.version)
+  if (!Array.isArray(ruyi.targets) || ruyi.targets.length === 0) {
+    throw new Error('Expected nonempty ruyi targets array')
+  }
+  const seen = new Set()
+  for (const entry of ruyi.targets) {
+    if (!entry || typeof entry !== 'object') {
+      throw new Error('Invalid ruyi target definition')
+    }
+    targetFor(entry.platform, entry.arch)
+    const key = `${entry.platform}-${entry.arch}`
+    if (seen.has(key)) {
+      throw new Error(`Duplicate ruyi target: ${key}`)
+    }
+    seen.add(key)
+    const resource = resourceById(entry.resource)
+    if (resource.type !== 'file') {
+      throw new Error(`Invalid file resource for ruyi ${key}: ${entry.resource}`)
+    }
+  }
+  return ruyi
+}
+
+function ruyiForTarget(target, ruyi = config.ruyi) {
+  const match = validateRuyi(ruyi).targets.find(entry =>
+    entry.platform === target.platform && entry.arch === target.arch)
+  return match ? resourceById(match.resource) : undefined
+}
+
 function archiveRoot(target, version) {
   validateVersion(version)
   return `${metadata.applicationName}-${target.platform}-${target.arch}-${version}`
@@ -177,6 +210,6 @@ function verifyArchitecture(file, target) {
 
 module.exports = {
   ROOT, TARGETS, config, metadata, targetFor, validateVersion, resourceForTarget, resourceById,
-  resourcePath, validateResources, archiveRoot, outputAsset,
+  resourcePath, validateResources, validateRuyi, ruyiForTarget, archiveRoot, outputAsset,
   parseChecksum, writeJson, macExecutable, verifyArchitecture,
 }

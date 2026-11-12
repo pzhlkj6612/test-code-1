@@ -77,8 +77,49 @@
       "url": "https://github.com/microsoft/pyright/releases/download/1.1.414/vscode-pyright.vsix",
       "sha256": "6c38b791244241766467f557d7fa6aec5ef4cbefd6bc4b4d9bae0c3283a3114e",
       "path": ".cache/resources/ms-pyright.pyright-1.1.414.vsix"
+    },
+    {
+      "id": "ruyi-linux-arm64",
+      "type": "file",
+      "url": "https://github.com/ruyisdk/ruyi/releases/download/0.54.0/ruyi-0.54.0.arm64",
+      "sha256": "e084e3ccfcb300b758a6d443202d8a47c9426e6d510944b7fbc3cf2ddbd328c5",
+      "path": ".cache/resources/ruyi-0.54.0.arm64"
+    },
+    {
+      "id": "ruyi-linux-x64",
+      "type": "file",
+      "url": "https://github.com/ruyisdk/ruyi/releases/download/0.54.0/ruyi-0.54.0.amd64",
+      "sha256": "8c5aa27a46fa7b65642c578bd6590a2f5310fe90db7841dbab135aea9ef3ef6e",
+      "path": ".cache/resources/ruyi-0.54.0.amd64"
+    },
+    {
+      "id": "ruyi-linux-riscv64",
+      "type": "file",
+      "url": "https://github.com/ruyisdk/ruyi/releases/download/0.54.0/ruyi-0.54.0.riscv64",
+      "sha256": "3b747f6f9ce014132ad4af9b4b5f39c8b45840f7a55a6762f80f0089e5e66277",
+      "path": ".cache/resources/ruyi-0.54.0.riscv64"
     }
   ],
+  "ruyi": {
+    "version": "0.54.0",
+    "targets": [
+      {
+        "platform": "linux",
+        "arch": "arm64",
+        "resource": "ruyi-linux-arm64"
+      },
+      {
+        "platform": "linux",
+        "arch": "x64",
+        "resource": "ruyi-linux-x64"
+      },
+      {
+        "platform": "linux",
+        "arch": "riscv64",
+        "resource": "ruyi-linux-riscv64"
+      }
+    ]
+  },
   "extensions": [
     {
       "id": "kendryte747.canmv-vscode",

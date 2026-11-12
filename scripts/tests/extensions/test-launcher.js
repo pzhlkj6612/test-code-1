@@ -13,19 +13,41 @@ const config = require('../../../config/release.json')
 
 const launcher = path.resolve(__dirname, '../../../extensions/launcher')
 
-function load(extension, failure) {
+function load(extension, failure, options = {}) {
   const commands = []
   const warnings = []
   const lookups = []
+  const lookupPaths = []
+  const appended = []
+  const deleted = []
+  const runtimeProcess = options.process ?? { platform: 'darwin', env: { PATH: '/usr/bin:/bin' } }
+  const extensionContext = options.withCollection === false
+    ? undefined
+    : {
+        environmentVariableCollection: {
+          append: (key, value) => appended.push([key, value]),
+          delete: key => deleted.push(key),
+        },
+      }
   const context = {
     module: { exports: {} },
+    __dirname: options.dirname ?? launcher,
+    process: runtimeProcess,
     console: { warn: (...args) => warnings.push(args) },
     require: (name) => {
+      if (name === 'node:fs') {
+        return fs
+      }
+      if (name === 'node:path') {
+        return path
+      }
       assert.equal(name, 'vscode')
       return {
+        env: options.appRoot ? { appRoot: options.appRoot } : undefined,
         extensions: {
           getExtension: (id) => {
             lookups.push(id)
+            lookupPaths.push(runtimeProcess.env.PATH)
             return extension
           },
         },
@@ -41,7 +63,16 @@ function load(extension, failure) {
     },
   }
   vm.runInNewContext(fs.readFileSync(path.join(launcher, 'extension.js'), 'utf8'), context)
-  return { activate: context.module.exports.activate, commands, warnings, lookups }
+  return {
+    activate: () => context.module.exports.activate(extensionContext),
+    commands,
+    warnings,
+    lookups,
+    lookupPaths,
+    appended,
+    deleted,
+    process: runtimeProcess,
+  }
 }
 
 test('disabled or absent RuyiSDK is skipped without a command or warning', async () => {
@@ -60,6 +91,58 @@ test('enabled but inactive RuyiSDK opens home on each launcher activation', asyn
   assert.deepEqual(state.warnings, [])
 })
 
+test('bundled ruyi on Linux is appended to PATH and terminal environment before RuyiSDK activates', async () => {
+  if (process.platform === 'win32') {
+    return
+  }
+  using installDir = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'ruyi-bundled-launcher-'))
+  const appRoot = path.join(installDir.path, 'resources/app')
+  const binDir = path.join(installDir.path, 'bin')
+  fs.mkdirSync(appRoot, { recursive: true })
+  fs.mkdirSync(binDir, { recursive: true })
+  fs.writeFileSync(path.join(binDir, 'ruyi'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
+
+  const state = load({ isActive: false }, undefined, {
+    appRoot,
+    process: { platform: 'linux', env: { PATH: '/usr/local/bin:/usr/bin' } },
+  })
+  await state.activate()
+  await state.activate()
+
+  const expectedPath = `/usr/local/bin:/usr/bin${path.delimiter}${binDir}`
+  assert.equal(state.process.env.PATH, expectedPath)
+  assert.deepEqual(state.lookupPaths, [expectedPath, expectedPath])
+  assert.deepEqual(state.appended, [
+    ['PATH', `${path.delimiter}${binDir}`],
+    ['PATH', `${path.delimiter}${binDir}`],
+  ])
+  assert.deepEqual(state.deleted, [])
+
+  const emptyPathState = load(undefined, undefined, {
+    appRoot,
+    process: { platform: 'linux', env: {} },
+  })
+  await emptyPathState.activate()
+  assert.equal(emptyPathState.process.env.PATH, binDir)
+})
+
+test('non-Linux hosts or missing bundled ruyi leave PATH untouched and clear terminal mutations', async () => {
+  using installDir = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'ruyi-absent-launcher-'))
+  const appRoot = path.join(installDir.path, 'resources/app')
+  fs.mkdirSync(appRoot, { recursive: true })
+
+  for (const platform of ['darwin', 'win32', 'linux']) {
+    const state = load(undefined, undefined, {
+      appRoot,
+      process: { platform, env: { PATH: '/usr/bin' } },
+    })
+    await state.activate()
+    assert.equal(state.process.env.PATH, '/usr/bin')
+    assert.deepEqual(state.appended, [])
+    assert.deepEqual(state.deleted, ['PATH'])
+  }
+})
+
 test('a genuine command failure remains visible', async () => {
   const error = new Error('Home panel failed')
   const state = load({ isActive: true }, error)
@@ -68,10 +151,10 @@ test('a genuine command failure remains visible', async () => {
   assert.equal(state.warnings[0][1], error)
 })
 
-test('launcher only supplies startup activation, not a late configuration override', () => {
+test('launcher activates eagerly without overriding user configuration defaults', () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(launcher, 'package.json'), 'utf8'))
   assert.equal(manifest.contributes.configurationDefaults, undefined)
-  assert.deepEqual(manifest.activationEvents, ['onStartupFinished'])
+  assert.deepEqual(manifest.activationEvents, ['*'])
 })
 
 test('patch changes only the built-in startup default and preserves user override semantics', () => {

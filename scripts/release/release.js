@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { isDeepStrictEqual } = require('node:util')
 const config = require('../../config/release.json')
-const { TARGETS, validateVersion, outputAsset, parseChecksum, resourceById } = require('./package-utils')
+const { TARGETS, validateVersion, validateRuyi, outputAsset, parseChecksum, resourceById } = require('./package-utils')
 const { sha256 } = require('./utils')
 const { validateExtensions, isPatched } = require('./package-extensions')
 const { createProgram, runCli } = require('./cli')
@@ -69,18 +69,21 @@ async function verifyArtifacts(directory) {
 function releaseNotes() {
   const version = config.releaseVersion
   validateVersion(version)
+  const ruyi = validateRuyi()
   const extensions = validateExtensions()
   const extensionsList = extensions.map((extension) => {
     const resource = extension.source === 'build' ? resourceById(extension.resource) : undefined
     const patched = isPatched(extension) ? ' with local patches' : ''
     return `- ${extension.id} ${extension.version}${resource ? ` (built from ${resource.commit}${patched})` : ''}`
   }).join('\n')
+  const ruyiTargets = ruyi.targets.map(entry => `${entry.platform}-${entry.arch}`).join(', ')
 
   return `RuyiSDK IDE ${version}, based on upstream editor ${config.baseVersion}.
 
 Includes the RuyiSDK IDE home launcher and:
 
 ${extensionsList}
+- ruyi ${ruyi.version} (${ruyiTargets})
 
 All packages include SHA-256 checksums.
 

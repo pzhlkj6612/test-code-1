@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { Readable } = require('node:stream')
 const { pipeline } = require('node:stream/promises')
-const { config, resourcePath, validateResources } = require('./package-utils')
+const { config, resourcePath, validateResources, validateRuyi, ruyiForTarget } = require('./package-utils')
 const { run, sha256 } = require('./utils')
 const { createProgram, runCli } = require('./cli')
 
@@ -79,7 +79,7 @@ function parseArguments(argv, output) {
       parsed = { selection: 'extensions' }
     })
   program.command('target')
-    .description('prepare the upstream archive for one packaging target')
+    .description('prepare pinned inputs for one packaging target')
     .argument('<platform>', 'target platform')
     .argument('<arch>', 'target architecture')
     .action((platform, arch) => {
@@ -102,12 +102,14 @@ function selectResources({ selection, platform, arch }) {
   if (matches.length !== 1) {
     throw new Error(`No file resource for ${platform}-${arch}`)
   }
-  return matches
+  const ruyi = ruyiForTarget({ platform, arch })
+  return ruyi ? [...matches, ruyi] : matches
 }
 
 async function main(argv) {
   const selection = parseArguments(argv)
   validateResources()
+  validateRuyi()
   for (const resource of selectResources(selection)) {
     if (resource.type === 'file') {
       await download(resource)

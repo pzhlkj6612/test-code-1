@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const { patchInstallation } = require('./patch-startup-default')
-const { ROOT, metadata, writeJson } = require('./package-utils')
+const { ROOT, metadata, writeJson, ruyiForTarget, resourcePath, verifyArchitecture } = require('./package-utils')
 const { run } = require('./utils')
 const { validateExtensions, isPatched } = require('./package-extensions')
 
@@ -48,7 +48,14 @@ function replaceLauncher(source, platform) {
     if (!source.includes('$VSCODE_PATH/codium')) {
       throw new Error('Upstream Linux launcher changed')
     }
-    return source.replaceAll('$VSCODE_PATH/codium', `$VSCODE_PATH/${metadata.binaryName}`)
+    const pathSetup = [
+      'case ":$PATH:" in',
+      '\t*":$VSCODE_PATH/bin:"*) ;;',
+      '\t*) PATH="${PATH:+$PATH:}$VSCODE_PATH/bin"; export PATH ;;',
+      'esac',
+    ].join('\n')
+    return source.replace(/^.*\$VSCODE_PATH\/codium.*$/m, match => `${pathSetup}\n${match}`)
+      .replaceAll('$VSCODE_PATH/codium', `$VSCODE_PATH/${metadata.binaryName}`)
       .replaceAll('\'codium\'', `'${metadata.binaryName}'`)
   }
   if (platform === 'win32') {
@@ -62,6 +69,23 @@ function replaceLauncher(source, platform) {
   }
   return source.replaceAll('\'codium\'', `'${metadata.binaryName}'`)
     .replace(/^APP_NAME="codium"(\r?)$/gm, `APP_NAME="${metadata.applicationName}"$1`)
+}
+
+function installRuyi(appDir, target, sourceFile) {
+  const resource = ruyiForTarget(target)
+  if (!resource) {
+    return false
+  }
+  const binary = sourceFile ?? resourcePath(resource)
+  if (!fs.existsSync(binary)) {
+    throw new Error(`Missing downloaded resource: ${resource.id}`)
+  }
+  verifyArchitecture(binary, target)
+  const destination = path.join(appDir, 'bin/ruyi')
+  fs.mkdirSync(path.dirname(destination), { recursive: true })
+  fs.copyFileSync(binary, destination)
+  fs.chmodSync(destination, 0o755)
+  return true
 }
 
 function overlay(appRoot, target) {
@@ -167,4 +191,4 @@ Icon=%k/resources/app/resources/linux/code.png
   }
 }
 
-module.exports = { patchProduct, replaceLauncher, overlay, rebrand }
+module.exports = { patchProduct, replaceLauncher, installRuyi, overlay, rebrand }

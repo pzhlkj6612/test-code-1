@@ -8,6 +8,7 @@ RuyiSDK IDE is a lightweight downstream overlay of [VSCodium](https://github.com
 - The RuyiSDK extension logo replaces the workbench logos; its monochrome version is used for the empty-window watermark in light, dark, and both high-contrast themes.
 - Bundled RuyiSDK light and dark color themes, with neutral editor surfaces, navy selection accents, and warm gold highlights.
 - The bundled [RuyiSDK VS Code extension](https://github.com/ruyisdk/ruyisdk-vscode-extension).
+- The bundled [ruyi](https://github.com/ruyisdk/ruyi) package manager CLI on Linux (`x64`/`arm64`/`RISC-V64`), detected automatically out of the box.
 - The bundled [CanMV extension](https://github.com/kendryte/canmv-vscode-extension), built from pinned source with native backends for every IDE target. A local patch ([patches/kendryte747.canmv-vscode](patches/kendryte747.canmv-vscode)) makes it depend on the bundled open-source [Pyright](https://github.com/microsoft/pyright) extension instead of Pylance, which is unavailable outside Microsoft products. Patched builds are excluded from extension auto-updates.
 - A home launcher that opens RuyiSDK Home on startup when RuyiSDK is enabled.
 

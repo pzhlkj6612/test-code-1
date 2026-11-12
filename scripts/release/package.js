@@ -6,12 +6,13 @@ const path = require('node:path')
 const AdmZip = require('adm-zip')
 const { Argument } = require('commander')
 const {
-  ROOT, TARGETS, config, metadata, validateVersion, resourceForTarget, resourceById, resourcePath,
+  ROOT, TARGETS, config, metadata, validateVersion, validateRuyi, ruyiForTarget,
+  resourceForTarget, resourceById, resourcePath,
   archiveRoot, outputAsset, macExecutable, verifyArchitecture,
 } = require('./package-utils')
 const { run, sha256 } = require('./utils')
 const { installExtensions, isPatched } = require('./package-extensions')
-const { overlay, rebrand } = require('./package-branding')
+const { installRuyi, overlay, rebrand } = require('./package-branding')
 const { generateIcons } = require('./generate-icons')
 const { createProgram, runCli } = require('./cli')
 
@@ -34,6 +35,7 @@ function createArchive(extracted, output, target, version = config.releaseVersio
 async function packageTarget(target) {
   const version = config.releaseVersion
   validateVersion(version)
+  validateRuyi()
   const requiredHost = target.platform === 'darwin' ? 'darwin' : target.platform === 'win32' ? 'win32' : 'linux'
   if (process.platform !== requiredHost) {
     throw new Error(`Package ${target.platform} on a ${requiredHost} host`)
@@ -45,6 +47,10 @@ async function packageTarget(target) {
   const archive = resourcePath(input)
   if (!fs.existsSync(archive)) {
     throw new Error(`Missing downloaded resource: ${input.id}`)
+  }
+  const ruyi = ruyiForTarget(target)
+  if (ruyi && !fs.existsSync(resourcePath(ruyi))) {
+    throw new Error(`Missing downloaded resource: ${ruyi.id}`)
   }
 
   fs.mkdirSync(path.join(ROOT, 'build'), { recursive: true })
@@ -71,6 +77,7 @@ async function packageTarget(target) {
   generateIcons()
   overlay(appRoot, target)
   installExtensions(appRoot, build.path, target)
+  installRuyi(appDir, target)
   rebrand(appDir, appRoot, target)
 
   const bundledExtensions = config.extensions.map((extension) => {
@@ -78,6 +85,9 @@ async function packageTarget(target) {
     const sourceSuffix = resource ? ` (source ${resource.commit}${isPatched(extension) ? ', locally patched' : ''})` : ''
     return `${extension.id}: ${extension.version}${sourceSuffix}`
   }).join('\n')
+  const bundledRuyi = ruyi
+    ? `Bundled tools:\nruyi: ${config.ruyi.version} (Apache-2.0; one-file binary embeds unmodified certifi under MPL-2.0)\n`
+    : ''
   const macOSNotice = target.platform === 'darwin'
     ? 'This macOS application is ad-hoc signed only, NOT Developer ID signed or notarized. Gatekeeper may block it.\n'
     : ''
@@ -85,7 +95,7 @@ async function packageTarget(target) {
 Based on checksum-verified upstream editor ${config.baseVersion}.
 Bundled extensions:
 ${bundledExtensions}
-The startup editor default is none; user settings still override it.
+${bundledRuyi}The startup editor default is none; user settings still override it.
 Editor auto-updates are disabled; install new RuyiSDK IDE releases manually.
 Upstream licenses and third-party notices are retained.
 ${macOSNotice}`

@@ -2,7 +2,7 @@
 'use strict'
 
 const fs = require('node:fs')
-const { TARGETS, validateResources } = require('./package-utils')
+const { TARGETS, validateResources, validateRuyi } = require('./package-utils')
 const { validateReleaseRequest } = require('./release')
 const { createProgram, runCli } = require('./cli')
 
@@ -21,6 +21,7 @@ function parseArguments(argv, output) {
 function main(argv) {
   const { output, event, ref, defaultBranch, requestedVersion } = parseArguments(argv)
   validateResources()
+  validateRuyi()
   if (event === 'workflow_dispatch' && requestedVersion) {
     validateReleaseRequest(ref, requestedVersion, defaultBranch)
   }

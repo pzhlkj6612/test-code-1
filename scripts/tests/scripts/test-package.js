@@ -14,7 +14,7 @@ const AdmZip = require('adm-zip')
 const simplePlist = require('simple-plist')
 const {
   TARGETS, targetFor, validateVersion, resourceForTarget, resourceById, resourcePath,
-  validateResources, archiveRoot, outputAsset,
+  validateResources, validateRuyi, ruyiForTarget, archiveRoot, outputAsset,
   parseChecksum, macExecutable, verifyArchitecture,
 } = require('../../release/package-utils')
 const { createArchive } = require('../../release/package')
@@ -22,7 +22,7 @@ const { sha256 } = require('../../release/utils')
 const {
   validateExtensions, patchSeries, isPatched, extensionAsset, verifyExtension, installExtensions,
 } = require('../../release/package-extensions')
-const { patchProduct, replaceLauncher, overlay, rebrand } = require('../../release/package-branding')
+const { patchProduct, replaceLauncher, installRuyi, overlay, rebrand } = require('../../release/package-branding')
 const { OUT_DIR: ICONS_DIR, generateIcons } = require('../../release/generate-icons')
 const { validateReleaseRequest, check, verifyArtifacts, releaseNotes } = require('../../release/release')
 const { download, clone } = require('../../release/prepare-inputs')
@@ -52,7 +52,8 @@ test('pinned resources and extension resource references are provider-neutral', 
   assert.deepEqual(validateExtensions().map(extension => extension.id), [
     'kendryte747.canmv-vscode', 'RuyiSDK.ruyisdk-vscode-extension', 'ms-pyright.pyright',
   ])
-  assert.equal(validateResources().length, 9)
+  assert.equal(validateResources().length, 12)
+  assert.equal(validateRuyi().version, config.ruyi.version)
   const [source, prebuilt] = config.extensions
   assert.equal(resourceById(source.resource).type, 'git')
   assert.match(extensionAsset(source), new RegExp(resourceById(source.resource).commit))
@@ -68,6 +69,16 @@ test('pinned resources and extension resource references are provider-neutral', 
     [{ ...prebuilt, id: source.id, version: source.version }],
   ]) {
     assert.throws(() => validateExtensions(entries), /extension|version|source|commit|checksum/i)
+  }
+  for (const ruyiConfig of [
+    null, [], { ...config.ruyi, version: 'v0.54.0' }, { ...config.ruyi, targets: [] },
+    { ...config.ruyi, targets: [null] },
+    { ...config.ruyi, targets: [{ platform: 'linux', arch: 'armhf', resource: 'ruyi-linux-x64' }] },
+    { ...config.ruyi, targets: [config.ruyi.targets[0], config.ruyi.targets[0]] },
+    { ...config.ruyi, targets: [{ platform: 'linux', arch: 'x64', resource: 'missing' }] },
+    { ...config.ruyi, targets: [{ platform: 'linux', arch: 'x64', resource: source.resource }] },
+  ]) {
+    assert.throws(() => validateRuyi(ruyiConfig), /ruyi|version|target|resource/i)
   }
   assert.throws(() => validateResources([{ ...config.resources[0], sha256: 'invalid' }]), /checksum/i)
   assert.throws(() => resourcePath({ path: '../outside' }), /escapes workspace/)
@@ -285,13 +296,49 @@ test('product identity is isolated without losing licenses, remote downloads or 
 })
 
 test('Linux and Windows CLI wrappers point at the renamed binary and preserve arguments', () => {
-  assert.equal(replaceLauncher('ELECTRON="$VSCODE_PATH/codium"\nwhich -a \'codium\'\n"$ELECTRON" "$@"', 'linux'),
-    'ELECTRON="$VSCODE_PATH/ruyisdk-ide"\nwhich -a \'ruyisdk-ide\'\n"$ELECTRON" "$@"')
+  const linuxWrapped = replaceLauncher('ELECTRON="$VSCODE_PATH/codium"\nwhich -a \'codium\'\n"$ELECTRON" "$@"', 'linux')
+  assert.equal(linuxWrapped, [
+    'case ":$PATH:" in',
+    '\t*":$VSCODE_PATH/bin:"*) ;;',
+    '\t*) PATH="${PATH:+$PATH:}$VSCODE_PATH/bin"; export PATH ;;',
+    'esac',
+    'ELECTRON="$VSCODE_PATH/ruyisdk-ide"',
+    'which -a \'ruyisdk-ide\'',
+    '"$ELECTRON" "$@"',
+  ].join('\n'))
   assert.equal(replaceLauncher('"%~dp0..\\VSCodium.exe" %*\r\n', 'win32'), '"%~dp0..\\ruyisdk-ide.exe" %*\r\n')
   assert.equal(replaceLauncher('APP_NAME="codium"\nNAME="VSCodium"\nSERVERDATAFOLDER=".vscodium-server"\nELECTRON="$VSCODE_PATH/$NAME.exe"\n', 'win32'),
     'APP_NAME="ruyisdk-ide"\nNAME="ruyisdk-ide"\nSERVERDATAFOLDER=".ruyisdk-ide-server"\nELECTRON="$VSCODE_PATH/$NAME.exe"\n')
   assert.throws(() => replaceLauncher('changed upstream', 'linux'), /launcher changed/)
   assert.throws(() => replaceLauncher('changed upstream', 'win32'), /launcher changed/)
+})
+
+test('bundled ruyi installs only on Linux targets with verified ELF architecture and executable mode', () => {
+  using rootDirectory = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'ruyi-install-cli-'))
+  const root = rootDirectory.path
+  for (const target of TARGETS) {
+    const app = path.join(root, `${target.platform}-${target.arch}`)
+    fs.mkdirSync(app)
+    if (target.platform !== 'linux') {
+      assert.equal(ruyiForTarget(target), undefined)
+      assert.equal(installRuyi(app, target), false)
+      assert.equal(fs.existsSync(path.join(app, 'bin/ruyi')), false)
+      continue
+    }
+    assert.equal(ruyiForTarget(target).id, `ruyi-linux-${target.arch}`)
+    const binary = path.join(root, `source-${target.arch}`)
+    fs.writeFileSync(binary, nativeHeader(target), { mode: 0o644 })
+    assert.equal(installRuyi(app, target, binary), true)
+    const installed = path.join(app, 'bin/ruyi')
+    verifyArchitecture(installed, target)
+    if (process.platform !== 'win32') {
+      assert.equal(fs.statSync(installed).mode & 0o777, 0o755)
+    }
+    const wrongArch = target.arch === 'x64' ? targetFor('linux', 'riscv64') : targetFor('linux', 'x64')
+    fs.writeFileSync(binary, nativeHeader(wrongArch))
+    assert.throws(() => installRuyi(app, target, binary), /does not match/)
+    assert.throws(() => installRuyi(app, target, path.join(root, 'missing')), /Missing downloaded resource/)
+  }
 })
 
 test('native binary headers match every requested architecture', () => {
@@ -538,4 +585,5 @@ test('release notes describe configured extensions without network access', () =
     }
   }
   assert.ok(notes.includes('with local patches'))
+  assert.ok(notes.includes(`ruyi ${config.ruyi.version} (linux-arm64, linux-x64, linux-riscv64)`))
 })

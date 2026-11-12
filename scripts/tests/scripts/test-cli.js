@@ -152,8 +152,14 @@ test('prepare-inputs.js selects all, extension or single-target resources', () =
   for (const target of TARGETS) {
     const selection = parse(['target', '--', target.platform, target.arch])
     assert.deepEqual(selection, { selection: 'target', platform: target.platform, arch: target.arch })
-    const [resource] = selectResources(selection)
-    assert.deepEqual([resource.type, resource.platform, resource.arch], ['file', target.platform, target.arch])
+    const resources = selectResources(selection)
+    assert.deepEqual([resources[0].type, resources[0].platform, resources[0].arch], ['file', target.platform, target.arch])
+    if (target.platform === 'linux') {
+      assert.equal(resources.length, 2)
+      assert.equal(resources[1].id, `ruyi-linux-${target.arch}`)
+    } else {
+      assert.equal(resources.length, 1)
+    }
   }
   assert.throws(() => selectResources(parse(['target', 'linux', 'armhf'])), /No file resource for linux-armhf/)
   rejects(parse, [], 'commander.help')

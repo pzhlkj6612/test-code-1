@@ -141,7 +141,7 @@ function archiveRoot(target, version) {
 
 function outputAsset(target, version) {
   validateVersion(version)
-  const base = archiveRoot(target, version);
+  const base = archiveRoot(target, version)
   const suffix = target.platform === 'darwin' ? '-unsigned' : ''
   return `${base}${suffix}.${target.format}`
 }

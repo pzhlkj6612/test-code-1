@@ -116,65 +116,76 @@ test('ruyi PATH bootstrap patches reject missing, duplicate or already-patched b
 })
 
 test('patched bootstrap exposes only the dedicated ruyi directory across spawns and login-shell resets', () => {
-  using installDir = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'ruyi-bootstrap-path-'))
-  const outDir = path.join(installDir.path, 'resources/app/out')
-  const appBinDir = path.join(installDir.path, 'bin')
-  const ruyiDir = path.join(installDir.path, RUYI_DIR)
-  fs.mkdirSync(outDir, { recursive: true })
+  using tempDir = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'ruyi-bootstrap-path-'))
+  const realInstallDir = path.join(tempDir.path, 'install')
+  const linkedInstallDir = path.join(tempDir.path, 'install-link')
+  fs.mkdirSync(realInstallDir)
+  fs.symlinkSync(realInstallDir, linkedInstallDir, 'junction')
+
+  // ESM resolves import.meta.dirname via fs.realpathSync (e.g. macOS /private/var, Windows 8.3 paths).
+  const canonicalRoot = fs.realpathSync(realInstallDir)
+  const appBinDir = path.join(canonicalRoot, 'bin')
+  const ruyiDir = path.join(canonicalRoot, RUYI_DIR)
+  fs.mkdirSync(path.join(realInstallDir, 'resources/app/out'), { recursive: true })
   fs.mkdirSync(appBinDir, { recursive: true })
   fs.writeFileSync(path.join(appBinDir, 'ruyisdk-ide'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
 
   const bundleSource = [
     'Object.defineProperty(process, "platform", { value: process.env.TEST_PLATFORM });',
+    'if (process.env.TEST_HAS_PATH === "1") { process.env.PATH = process.env.TEST_PROCESS_PATH; } else { delete process.env.PATH; }',
     'globalThis._VSCODE_FILE_ROOT=import.meta.dirname;',
     'const traced=[];const t={trace:(...args)=>traced.push(args)};',
-    'const $={PATH:process.env.TEST_SHELL_PATH};',
+    'const $=process.env.TEST_HAS_PATH==="1"?{PATH:process.env.TEST_SHELL_PATH}:{};',
     'delete $.XDG_RUNTIME_DIR,t.trace("getUnixShellEnvironment#result",$);',
     'globalThis._RUYISDK_APPEND_RUYI_PATH(process.env);',
     'console.log(JSON.stringify({processPath:process.env.PATH??null,shellPath:$.PATH??null,traced:traced.length}));',
   ].join('\n')
-  const bundleFile = path.join(outDir, 'main.mjs')
+  const bundleFile = path.join(linkedInstallDir, 'resources/app/out/main.mjs')
   fs.writeFileSync(bundleFile, patchShellEnvRuyiPath(patchRuyiPath(bundleSource)))
 
-  const runBundle = (env) => {
-    const result = spawnSync(process.execPath, [bundleFile], { env, encoding: 'utf8' })
+  const runBundle = (platform, processPath, shellPath = processPath) => {
+    const result = spawnSync(process.execPath, [bundleFile], {
+      env: {
+        ...process.env,
+        TEST_PLATFORM: platform,
+        TEST_HAS_PATH: processPath === undefined ? '0' : '1',
+        TEST_PROCESS_PATH: processPath ?? '',
+        TEST_SHELL_PATH: shellPath ?? '',
+      },
+      encoding: 'utf8',
+    })
     assert.equal(result.status, 0, result.stderr)
     return JSON.parse(result.stdout.trim())
   }
 
   for (const platform of ['darwin', 'win32', 'linux']) {
-    const absent = runBundle({ TEST_PLATFORM: platform, PATH: '/usr/bin', TEST_SHELL_PATH: '/usr/bin' })
-    assert.deepEqual(absent, { processPath: '/usr/bin', shellPath: '/usr/bin', traced: 1 })
+    assert.deepEqual(runBundle(platform, '/usr/bin'), { processPath: '/usr/bin', shellPath: '/usr/bin', traced: 1 })
   }
 
   fs.mkdirSync(path.join(ruyiDir, 'ruyi'), { recursive: true })
-  assert.deepEqual(runBundle({ TEST_PLATFORM: 'linux', PATH: '/usr/bin', TEST_SHELL_PATH: '/usr/bin' }),
-    { processPath: '/usr/bin', shellPath: '/usr/bin', traced: 1 })
+  assert.deepEqual(runBundle('linux', '/usr/bin'), { processPath: '/usr/bin', shellPath: '/usr/bin', traced: 1 })
   fs.rmSync(path.join(ruyiDir, 'ruyi'), { recursive: true })
 
   fs.writeFileSync(path.join(ruyiDir, 'ruyi'), '#!/bin/sh\nexit 0\n', { mode: 0o644 })
   if (process.platform !== 'win32') {
-    assert.deepEqual(runBundle({ TEST_PLATFORM: 'linux', PATH: '/usr/bin', TEST_SHELL_PATH: '/usr/bin' }),
-      { processPath: '/usr/bin', shellPath: '/usr/bin', traced: 1 })
+    assert.deepEqual(runBundle('linux', '/usr/bin'), { processPath: '/usr/bin', shellPath: '/usr/bin', traced: 1 })
   }
   fs.chmodSync(path.join(ruyiDir, 'ruyi'), 0o755)
 
   for (const platform of ['darwin', 'win32']) {
-    assert.deepEqual(runBundle({ TEST_PLATFORM: platform, PATH: '/usr/bin', TEST_SHELL_PATH: '/usr/bin' }),
-      { processPath: '/usr/bin', shellPath: '/usr/bin', traced: 1 })
+    assert.deepEqual(runBundle(platform, '/usr/bin'), { processPath: '/usr/bin', shellPath: '/usr/bin', traced: 1 })
   }
 
   const expected = `/usr/local/bin${path.delimiter}/usr/bin${path.delimiter}${ruyiDir}`
-  const populated = runBundle({
-    TEST_PLATFORM: 'linux',
-    PATH: `/usr/local/bin${path.delimiter}/usr/bin${path.delimiter}`,
-    TEST_SHELL_PATH: `/usr/local/bin${path.delimiter}/usr/bin`,
-  })
+  const populated = runBundle(
+    'linux',
+    `/usr/local/bin${path.delimiter}/usr/bin${path.delimiter}`,
+    `/usr/local/bin${path.delimiter}/usr/bin`,
+  )
   assert.deepEqual(populated, { processPath: expected, shellPath: expected, traced: 1 })
   assert.equal(populated.processPath.includes(appBinDir), false)
 
-  const empty = runBundle({ TEST_PLATFORM: 'linux' })
-  assert.deepEqual(empty, { processPath: ruyiDir, shellPath: ruyiDir, traced: 1 })
+  assert.deepEqual(runBundle('linux', undefined), { processPath: ruyiDir, shellPath: ruyiDir, traced: 1 })
 })
 
 function installation(root) {

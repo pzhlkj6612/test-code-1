@@ -43,19 +43,14 @@ function patchProduct(product, identity = metadata) {
   return product
 }
 
+const RUYI_DIR = 'resources/ruyi'
+
 function replaceLauncher(source, platform) {
   if (platform === 'linux') {
     if (!source.includes('$VSCODE_PATH/codium')) {
       throw new Error('Upstream Linux launcher changed')
     }
-    const pathSetup = [
-      'case ":$PATH:" in',
-      '\t*":$VSCODE_PATH/bin:"*) ;;',
-      '\t*) PATH="${PATH:+$PATH:}$VSCODE_PATH/bin"; export PATH ;;',
-      'esac',
-    ].join('\n')
-    return source.replace(/^.*\$VSCODE_PATH\/codium.*$/m, match => `${pathSetup}\n${match}`)
-      .replaceAll('$VSCODE_PATH/codium', `$VSCODE_PATH/${metadata.binaryName}`)
+    return source.replaceAll('$VSCODE_PATH/codium', `$VSCODE_PATH/${metadata.binaryName}`)
       .replaceAll('\'codium\'', `'${metadata.binaryName}'`)
   }
   if (platform === 'win32') {
@@ -81,7 +76,7 @@ function installRuyi(appDir, target, sourceFile) {
     throw new Error(`Missing downloaded resource: ${resource.id}`)
   }
   verifyArchitecture(binary, target)
-  const destination = path.join(appDir, 'bin/ruyi')
+  const destination = path.join(appDir, RUYI_DIR, 'ruyi')
   fs.mkdirSync(path.dirname(destination), { recursive: true })
   fs.copyFileSync(binary, destination)
   fs.chmodSync(destination, 0o755)
@@ -191,4 +186,4 @@ Icon=%k/resources/app/resources/linux/code.png
   }
 }
 
-module.exports = { patchProduct, replaceLauncher, installRuyi, overlay, rebrand }
+module.exports = { RUYI_DIR, patchProduct, replaceLauncher, installRuyi, overlay, rebrand }

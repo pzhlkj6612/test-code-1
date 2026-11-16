@@ -22,7 +22,7 @@ const { sha256 } = require('../../release/utils')
 const {
   validateExtensions, patchSeries, isPatched, extensionAsset, verifyExtension, installExtensions,
 } = require('../../release/package-extensions')
-const { patchProduct, replaceLauncher, installRuyi, overlay, rebrand } = require('../../release/package-branding')
+const { RUYI_DIR, patchProduct, replaceLauncher, installRuyi, overlay, rebrand } = require('../../release/package-branding')
 const { OUT_DIR: ICONS_DIR, generateIcons } = require('../../release/generate-icons')
 const { validateReleaseRequest, check, verifyArtifacts, releaseNotes } = require('../../release/release')
 const { download, clone } = require('../../release/prepare-inputs')
@@ -296,16 +296,8 @@ test('product identity is isolated without losing licenses, remote downloads or 
 })
 
 test('Linux and Windows CLI wrappers point at the renamed binary and preserve arguments', () => {
-  const linuxWrapped = replaceLauncher('ELECTRON="$VSCODE_PATH/codium"\nwhich -a \'codium\'\n"$ELECTRON" "$@"', 'linux')
-  assert.equal(linuxWrapped, [
-    'case ":$PATH:" in',
-    '\t*":$VSCODE_PATH/bin:"*) ;;',
-    '\t*) PATH="${PATH:+$PATH:}$VSCODE_PATH/bin"; export PATH ;;',
-    'esac',
-    'ELECTRON="$VSCODE_PATH/ruyisdk-ide"',
-    'which -a \'ruyisdk-ide\'',
-    '"$ELECTRON" "$@"',
-  ].join('\n'))
+  assert.equal(replaceLauncher('ELECTRON="$VSCODE_PATH/codium"\nwhich -a \'codium\'\n"$ELECTRON" "$@"', 'linux'),
+    'ELECTRON="$VSCODE_PATH/ruyisdk-ide"\nwhich -a \'ruyisdk-ide\'\n"$ELECTRON" "$@"')
   assert.equal(replaceLauncher('"%~dp0..\\VSCodium.exe" %*\r\n', 'win32'), '"%~dp0..\\ruyisdk-ide.exe" %*\r\n')
   assert.equal(replaceLauncher('APP_NAME="codium"\nNAME="VSCodium"\nSERVERDATAFOLDER=".vscodium-server"\nELECTRON="$VSCODE_PATH/$NAME.exe"\n', 'win32'),
     'APP_NAME="ruyisdk-ide"\nNAME="ruyisdk-ide"\nSERVERDATAFOLDER=".ruyisdk-ide-server"\nELECTRON="$VSCODE_PATH/$NAME.exe"\n')
@@ -313,7 +305,7 @@ test('Linux and Windows CLI wrappers point at the renamed binary and preserve ar
   assert.throws(() => replaceLauncher('changed upstream', 'win32'), /launcher changed/)
 })
 
-test('bundled ruyi installs only on Linux targets with verified ELF architecture and executable mode', () => {
+test('bundled ruyi installs into a dedicated directory only on Linux targets with verified ELF architecture', () => {
   using rootDirectory = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'ruyi-install-cli-'))
   const root = rootDirectory.path
   for (const target of TARGETS) {
@@ -322,14 +314,16 @@ test('bundled ruyi installs only on Linux targets with verified ELF architecture
     if (target.platform !== 'linux') {
       assert.equal(ruyiForTarget(target), undefined)
       assert.equal(installRuyi(app, target), false)
-      assert.equal(fs.existsSync(path.join(app, 'bin/ruyi')), false)
+      assert.equal(fs.existsSync(path.join(app, RUYI_DIR)), false)
       continue
     }
     assert.equal(ruyiForTarget(target).id, `ruyi-linux-${target.arch}`)
     const binary = path.join(root, `source-${target.arch}`)
     fs.writeFileSync(binary, nativeHeader(target), { mode: 0o644 })
     assert.equal(installRuyi(app, target, binary), true)
-    const installed = path.join(app, 'bin/ruyi')
+    assert.equal(fs.existsSync(path.join(app, 'bin/ruyi')), false)
+    assert.deepEqual(fs.readdirSync(path.join(app, RUYI_DIR)), ['ruyi'])
+    const installed = path.join(app, RUYI_DIR, 'ruyi')
     verifyArchitecture(installed, target)
     if (process.platform !== 'win32') {
       assert.equal(fs.statSync(installed).mode & 0o777, 0o755)
@@ -418,8 +412,13 @@ test('shared overlay patches integrity and bundles the home launcher for all pla
       fs.writeFileSync(path.join(app, 'out/media', name), '<svg>upstream logo</svg>')
     }
     const source = '"workbench.startupEditor":{type:"string",default:"welcomePage"};let t=i.version;i.target?t=`${t} (${i.target} setup)`:i.darwinUniversalAssetId&&(t=`${t} (Universal)`)'
+    const bootstrap = 'globalThis._VSCODE_FILE_ROOT=import.meta.dirname;var D=void 0;'
+    const main = `${bootstrap}function NI(t,$){delete $.XDG_RUNTIME_DIR,t.trace("getUnixShellEnvironment#result",$)}`
     const workbench = 'vs/workbench/workbench.desktop.main.js'
     fs.writeFileSync(path.join(app, 'out', workbench), source)
+    fs.writeFileSync(path.join(app, 'out/bootstrap-fork.js'), bootstrap)
+    fs.writeFileSync(path.join(app, 'out/cli.js'), bootstrap)
+    fs.writeFileSync(path.join(app, 'out/main.js'), main)
     const hash = crypto.createHash('sha256').update(source).digest('base64').replace(/=+$/, '')
     fs.writeFileSync(path.join(app, 'product.json'), JSON.stringify({
       checksums: { [workbench]: hash }, builtInExtensionsEnabledWithAutoUpdates: [],
@@ -432,6 +431,9 @@ test('shared overlay patches integrity and bundles the home launcher for all pla
     const patchedWorkbench = fs.readFileSync(path.join(app, 'out', workbench), 'utf8')
     assert.match(patchedWorkbench, /default:"none"/)
     assert.ok(patchedWorkbench.includes(`\`${config.releaseVersion} (VSCodium \${i.version})\``))
+    for (const file of ['bootstrap-fork.js', 'cli.js', 'main.js']) {
+      assert.match(fs.readFileSync(path.join(app, 'out', file), 'utf8'), /_RUYISDK_APPEND_RUYI_PATH/)
+    }
     assert.equal(JSON.parse(fs.readFileSync(path.join(app, 'package.json'), 'utf8')).name, 'RuyiSDK IDE')
     assert.ok(fs.existsSync(path.join(app, 'extensions/ruyisdk-ide.home-launcher/extension.js')))
     const themeRoot = path.join(app, 'extensions/ruyisdk-ide.ruyisdk-theme')

@@ -23,6 +23,7 @@ const {
   validateExtensions, patchSeries, isPatched, extensionAsset, verifyExtension, installExtensions,
 } = require('../../release/package-extensions')
 const { RUYI_DIR, patchProduct, replaceLauncher, installRuyi, overlay, rebrand } = require('../../release/package-branding')
+const { RUYI_PATH_MODULE, RUYI_PATH_SOURCE } = require('../../release/patch-startup-default')
 const { OUT_DIR: ICONS_DIR, generateIcons } = require('../../release/generate-icons')
 const { validateReleaseRequest, check, verifyArtifacts, releaseNotes } = require('../../release/release')
 const { download, clone } = require('../../release/prepare-inputs')
@@ -431,6 +432,10 @@ test('shared overlay patches integrity and bundles the home launcher for all pla
     const patchedWorkbench = fs.readFileSync(path.join(app, 'out', workbench), 'utf8')
     assert.match(patchedWorkbench, /default:"none"/)
     assert.ok(patchedWorkbench.includes(`\`${config.releaseVersion} (VSCodium \${i.version})\``))
+    assert.equal(
+      fs.readFileSync(path.join(app, 'out', RUYI_PATH_MODULE), 'utf8'),
+      fs.readFileSync(RUYI_PATH_SOURCE, 'utf8'),
+    )
     for (const file of ['bootstrap-fork.js', 'cli.js', 'main.js']) {
       assert.match(fs.readFileSync(path.join(app, 'out', file), 'utf8'), /_RUYISDK_APPEND_RUYI_PATH/)
     }

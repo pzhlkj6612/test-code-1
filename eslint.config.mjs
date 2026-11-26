@@ -5,7 +5,7 @@ const js = require('@eslint/js')
 const stylistic = require('@stylistic/eslint-plugin')
 const globals = require('globals')
 
-const files = ['scripts/**/*.js', 'extensions/**/*.js']
+const files = ['scripts/**/*.{js,mjs}', 'extensions/**/*.js']
 
 export default [
   { files, ...js.configs.recommended },
@@ -29,6 +29,12 @@ export default [
         caughtErrorsIgnorePattern: '^_',
         ignoreRestSiblings: false,
       }],
+    },
+  },
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      sourceType: 'module',
     },
   },
 ]

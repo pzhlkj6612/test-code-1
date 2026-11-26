@@ -8,19 +8,9 @@ const { createProgram, runCli } = require('./cli')
 const { config, validateVersion } = require('./package-utils')
 
 const WORKBENCH = 'vs/workbench/workbench.desktop.main.js'
-
-const RUYI_PATH_HELPER = [
-  'globalThis._RUYISDK_APPEND_RUYI_PATH=(env)=>{',
-  'if(process.platform!=="linux"||!env||typeof env!=="object"){return}',
-  'const fs=process.getBuiltinModule?.("node:fs"),path=process.getBuiltinModule?.("node:path");',
-  'if(!fs||!path||typeof globalThis._VSCODE_FILE_ROOT!=="string"){return}',
-  'const dir=path.resolve(globalThis._VSCODE_FILE_ROOT,"../../ruyi"),bin=path.join(dir,"ruyi");',
-  'try{if(!fs.statSync(bin).isFile()){return}fs.accessSync(bin,fs.constants.X_OK)}catch{return}',
-  'const entries=(env.PATH||"").split(path.delimiter).filter(Boolean);',
-  'if(!entries.includes(dir)){env.PATH=[...entries,dir].join(path.delimiter)}',
-  '};',
-  'globalThis._RUYISDK_APPEND_RUYI_PATH(process.env);',
-].join('')
+const RUYI_PATH_MODULE = 'ruyisdk-ruyi-path.mjs'
+const RUYI_PATH_SOURCE = path.join(__dirname, RUYI_PATH_MODULE)
+const RUYI_PATH_HOOK = `import{appendRuyiPath as _RUYISDK_APPEND_RUYI_PATH}from"./${RUYI_PATH_MODULE}";globalThis._RUYISDK_APPEND_RUYI_PATH=_RUYISDK_APPEND_RUYI_PATH;_RUYISDK_APPEND_RUYI_PATH(process.env);`
 
 function checksum(file) {
   return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('base64').replace(/=+$/, '')
@@ -57,12 +47,12 @@ function patchAboutVersion(source, version = config.releaseVersion) {
 }
 
 function patchRuyiPath(source) {
-  const fileRoot = /globalThis\._VSCODE_FILE_ROOT=import\.meta\.dirname;(?!globalThis\._RUYISDK_APPEND_RUYI_PATH=)/g
+  const fileRoot = /globalThis\._VSCODE_FILE_ROOT=import\.meta\.dirname;(?!import\{appendRuyiPath as _RUYISDK_APPEND_RUYI_PATH\})/g
   const matches = [...source.matchAll(fileRoot)]
   if (matches.length !== 1) {
     throw new Error(`Expected one bootstrap file root definition, found ${matches.length}. Review the upstream bundle before packaging.`)
   }
-  return source.replace(fileRoot, match => `${match}${RUYI_PATH_HELPER}`)
+  return source.replace(fileRoot, match => `${match}${RUYI_PATH_HOOK}`)
 }
 
 function patchShellEnvRuyiPath(source) {
@@ -90,6 +80,7 @@ function patchInstallation(appRoot) {
     const bundle = path.join(appRoot, 'out', file)
     return [file, bundle, apply(fs.readFileSync(bundle, 'utf8'))]
   })
+  fs.copyFileSync(RUYI_PATH_SOURCE, path.join(appRoot, 'out', RUYI_PATH_MODULE))
   for (const [file, bundle, content] of updates) {
     fs.writeFileSync(bundle, content)
     if (Object.hasOwn(product.checksums, file)) {
@@ -118,6 +109,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  RUYI_PATH_MODULE, RUYI_PATH_SOURCE,
   patchStartupDefault, patchAboutVersion, patchRuyiPath, patchShellEnvRuyiPath,
   patchInstallation, parseArguments, main,
 }

@@ -10,6 +10,7 @@ const os = require('node:os')
 const crypto = require('node:crypto')
 const { spawnSync } = require('node:child_process')
 const {
+  RUYI_PATH_MODULE, RUYI_PATH_SOURCE,
   patchStartupDefault, patchAboutVersion, patchRuyiPath, patchShellEnvRuyiPath, patchInstallation,
 } = require('../../release/patch-startup-default')
 const { RUYI_DIR } = require('../../release/package-branding')
@@ -104,6 +105,8 @@ test('about version patch formats downstream and upstream versions and rejects u
 test('ruyi PATH bootstrap patches reject missing, duplicate or already-patched bundles', () => {
   const bootstrap = 'globalThis._VSCODE_FILE_ROOT=import.meta.dirname;var Ow=void 0;'
   const patchedBootstrap = patchRuyiPath(bootstrap)
+  assert.equal(patchedBootstrap.includes('\n'), false)
+  assert.ok(patchedBootstrap.includes(`from"./${RUYI_PATH_MODULE}"`))
   for (const value of ['', bootstrap + bootstrap, patchedBootstrap]) {
     assert.throws(() => patchRuyiPath(value), /Expected one bootstrap file root definition/)
   }
@@ -141,6 +144,7 @@ test('patched bootstrap exposes only the dedicated ruyi directory across spawns 
     'console.log(JSON.stringify({processPath:process.env.PATH??null,shellPath:$.PATH??null,traced:traced.length}));',
   ].join('\n')
   const bundleFile = path.join(linkedInstallDir, 'resources/app/out/main.mjs')
+  fs.copyFileSync(RUYI_PATH_SOURCE, path.join(realInstallDir, 'resources/app/out', RUYI_PATH_MODULE))
   fs.writeFileSync(bundleFile, patchShellEnvRuyiPath(patchRuyiPath(bundleSource)))
 
   const runBundle = (platform, processPath, shellPath = processPath) => {
@@ -212,8 +216,14 @@ test('intentional patch updates only its checksum and preserves integrity checki
   const updated = JSON.parse(fs.readFileSync(path.join(root, 'product.json'), 'utf8'))
   const patched = fs.readFileSync(path.join(root, 'out', workbench), 'utf8')
   assert.ok(patched.includes(`\`${config.releaseVersion} (VSCodium \${i.version})\``))
+  assert.equal(
+    fs.readFileSync(path.join(root, 'out', RUYI_PATH_MODULE), 'utf8'),
+    fs.readFileSync(RUYI_PATH_SOURCE, 'utf8'),
+  )
   for (const file of ['bootstrap-fork.js', 'cli.js', 'main.js']) {
-    assert.match(fs.readFileSync(path.join(root, 'out', file), 'utf8'), /_RUYISDK_APPEND_RUYI_PATH/)
+    const content = fs.readFileSync(path.join(root, 'out', file), 'utf8')
+    assert.ok(content.includes(`from"./${RUYI_PATH_MODULE}"`))
+    assert.match(content, /_RUYISDK_APPEND_RUYI_PATH/)
   }
   assert.match(fs.readFileSync(path.join(root, 'out/main.js'), 'utf8'), /_RUYISDK_APPEND_RUYI_PATH\?\.\(\$\)/)
   assert.equal(updated.checksums[workbench], hash(Buffer.from(patched)))
@@ -230,6 +240,7 @@ test('unexpected modification is rejected rather than given a new checksum', () 
   fs.writeFileSync(path.join(root, 'out/other.js'), 'unexpected modification')
   assert.throws(() => patchInstallation(root), /checksum mismatch.*other\.js/)
   assert.equal(fs.readFileSync(path.join(root, 'out', workbench), 'utf8'), before)
+  assert.equal(fs.existsSync(path.join(root, 'out', RUYI_PATH_MODULE)), false)
 })
 
 test('missing workbench integrity entry fails packaging', () => {
